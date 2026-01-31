@@ -1,0 +1,342 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Smart Attendance System{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --success-color: #2ec4b6;
+            --warning-color: #ff9f1c;
+            --danger-color: #e71d36;
+            --dark-color: #1a1a2e;
+            --light-color: #f8f9fa;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f5f7fb;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--dark-color) 0%, #16213e 100%);
+            padding: 20px;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .sidebar-brand {
+            color: white;
+            font-size: 1.4rem;
+            font-weight: 700;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .sidebar-brand i {
+            color: var(--success-color);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .sidebar-menu a i {
+            margin-right: 12px;
+            font-size: 1.2rem;
+        }
+        
+        .sidebar-menu .menu-header {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 15px 15px 10px;
+            margin-top: 10px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 30px;
+            min-height: 100vh;
+        }
+        
+        /* Cards */
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border: none;
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card .icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+        
+        .stat-card .icon.primary { background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); }
+        .stat-card .icon.success { background: linear-gradient(135deg, var(--success-color), #20a39e); }
+        .stat-card .icon.warning { background: linear-gradient(135deg, var(--warning-color), #f77f00); }
+        .stat-card .icon.danger { background: linear-gradient(135deg, var(--danger-color), #c9184a); }
+        
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+        
+        .stat-card .label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        /* Tables */
+        .table-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .table-card .card-header {
+            background: white;
+            border-bottom: 1px solid #eee;
+            padding: 20px 25px;
+            font-weight: 600;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table th {
+            border-top: none;
+            color: #6c757d;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 15px 20px;
+            background: #f8f9fa;
+        }
+        
+        .table td {
+            padding: 15px 20px;
+            vertical-align: middle;
+        }
+        
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-color), #20a39e);
+            border: none;
+        }
+        
+        /* Badges */
+        .badge-success {
+            background: rgba(46, 196, 182, 0.15);
+            color: var(--success-color);
+        }
+        
+        .badge-danger {
+            background: rgba(231, 29, 54, 0.15);
+            color: var(--danger-color);
+        }
+        
+        /* Page Header */
+        .page-header {
+            margin-bottom: 30px;
+        }
+        
+        .page-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+        
+        .page-header p {
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+        
+        /* Alerts */
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        /* Forms */
+        .form-control, .form-select {
+            border-radius: 8px;
+            padding: 12px 15px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: var(--dark-color);
+            margin-bottom: 8px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-shield-check"></i> Smart Attendance
+        </div>
+        
+        <ul class="sidebar-menu">
+            <li>
+                <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <i class="bi bi-grid-1x2-fill"></i> Dashboard
+                </a>
+            </li>
+            
+            <li class="menu-header">Student Management</li>
+            
+            <li>
+                <a href="{% url 'register_student' %}" class="{% if request.resolver_match.url_name == 'register_student' %}active{% endif %}">
+                    <i class="bi bi-person-plus-fill"></i> Register Student
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'student_list' %}" class="{% if request.resolver_match.url_name == 'student_list' %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i> All Students
+                </a>
+            </li>
+            
+            <li class="menu-header">Attendance</li>
+            
+            <li>
+                <a href="{% url 'attendance_list' %}" class="{% if request.resolver_match.url_name == 'attendance_list' %}active{% endif %}">
+                    <i class="bi bi-calendar-check-fill"></i> Attendance Records
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
+                    <i class="bi bi-file-earmark-bar-graph-fill"></i> Reports
+                </a>
+            </li>
+            
+            <li class="menu-header">System</li>
+            
+            <li>
+                <a href="{% url 'system_logs' %}" class="{% if request.resolver_match.url_name == 'system_logs' %}active{% endif %}">
+                    <i class="bi bi-terminal-fill"></i> System Logs
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'admin:index' %}">
+                    <i class="bi bi-gear-fill"></i> Admin Panel
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

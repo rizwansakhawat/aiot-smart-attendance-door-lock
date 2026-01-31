@@ -127,7 +127,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Face recognition settings (custom)
 FACE_RECOGNITION_TOLERANCE = 0.6
-CAMERA_INDEX = 0
+CAMERA_INDEX = 1
 ARDUINO_PORT = 'COM3'  # Change to your Arduino port
 ARDUINO_BAUD_RATE = 9600
 

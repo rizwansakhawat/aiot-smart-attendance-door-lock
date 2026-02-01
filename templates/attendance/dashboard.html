@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-grid-1x2-fill"></i> Dashboard</h1>
+    <p>Welcome to Smart Attendance System - {{ today|date:"l, F d, Y" }}</p>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="number">{{ total_students }}</div>
+                    <div class="label">Total Students</div>
+                </div>
+                <div class="icon primary">
+                    <i class="bi bi-people"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="number text-success">{{ present_today }}</div>
+                    <div class="label">Present Today</div>
+                </div>
+                <div class="icon success">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="number text-warning">{{ absent_today }}</div>
+                    <div class="label">Absent Today</div>
+                </div>
+                <div class="icon warning">
+                    <i class="bi bi-x-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="number text-danger">{{ failed_attempts }}</div>
+                    <div class="label">Failed Attempts</div>
+                </div>
+                <div class="icon danger">
+                    <i class="bi bi-shield-x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Progress -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="table-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history"></i> Recent Attendance</span>
+                <a href="{% url 'attendance_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Roll Number</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in recent_entries %}
+                        <tr>
+                            <td>
+                                <strong>{{ entry.student.name }}</strong>
+                            </td>
+                            <td>{{ entry.student.roll_number }}</td>
+                            <td>{{ entry.timestamp|time:"H:i:s" }}</td>
+                            <td>
+                                <span class="badge badge-success">
+                                    <i class="bi bi-check"></i> Present
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No attendance records for today
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="stat-card h-100">
+            <h5 class="mb-4"><i class="bi bi-pie-chart"></i> Today's Progress</h5>
+            
+            <div class="mb-4">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Attendance Rate</span>
+                    <span class="fw-bold">{{ attendance_percentage }}%</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div class="progress-bar bg-success" style="width: {{ attendance_percentage }}%"></div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="d-grid gap-2">
+                <a href="{% url 'register_student' %}" class="btn btn-primary">
+                    <i class="bi bi-person-plus"></i> Register New Student
+                </a>
+                <a href="{% url 'reports' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> Generate Report
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

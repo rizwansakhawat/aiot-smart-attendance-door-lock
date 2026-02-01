@@ -1,0 +1,143 @@
+<!-- templates/attendance/admin_dashboard.html -->
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - Smart Attendance System{% endblock %}
+
+{% block content %}
+<!-- Welcome Banner -->
+<div class="welcome-banner" style="background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%); border-radius: 20px; padding: 30px; color: white; margin-bottom: 30px;">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h2><i class="bi bi-shield-check me-2"></i>Admin Dashboard</h2>
+            <p class="mb-0">Welcome back, {{ request.user.get_full_name|default:request.user.username }}! Full system access enabled.</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div style="font-size: 2rem; font-weight: 700;" id="current-time">--:--:--</div>
+            <div>{{ today|date:"l, F d, Y" }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="icon primary" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #4361ee, #3f37c9); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="bi bi-people-fill"></i>
+            </div>
+            <div class="number" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ total_students }}</div>
+            <div class="label" style="color: #6c757d;">Total Registered</div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="icon success" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #2ec4b6, #20a39e); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <div class="number text-success" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ present_today }}</div>
+            <div class="label" style="color: #6c757d;">Present Today</div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="icon warning" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #ff9f1c, #f77f00); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="bi bi-exclamation-circle-fill"></i>
+            </div>
+            <div class="number text-warning" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ absent_today }}</div>
+            <div class="label" style="color: #6c757d;">Absent Today</div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="icon danger" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #e71d36, #c9184a); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="bi bi-shield-x-fill"></i>
+            </div>
+            <div class="number text-danger" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ failed_attempts }}</div>
+            <div class="label" style="color: #6c757d;">Failed Attempts</div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Attendance & Quick Actions -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="table-card" style="background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
+            <div class="card-header" style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Attendance</h5>
+                <a href="{% url 'attendance_list' %}" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Roll Number</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in recent_entries %}
+                        <tr>
+                            <td><strong>{{ entry.student.name }}</strong></td>
+                            <td>{{ entry.student.roll_number }}</td>
+                            <td>{{ entry.timestamp|time:"H:i:s" }}</td>
+                            <td><span class="badge bg-success">Present</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No attendance records for today
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="stat-card h-100">
+            <h5 class="mb-4"><i class="bi bi-lightning me-2"></i>Quick Actions</h5>
+            
+            <div class="d-grid gap-3">
+                <a href="{% url 'register_student' %}" class="btn btn-primary">
+                    <i class="bi bi-person-plus me-2"></i>Register New Student
+                </a>
+                <a href="{% url 'student_list' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-people me-2"></i>Manage Students
+                </a>
+                <a href="{% url 'reports' %}" class="btn btn-outline-success">
+                    <i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Report
+                </a>
+                <a href="{% url 'system_logs' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-terminal me-2"></i>System Logs
+                </a>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="text-center">
+                <div class="h3 mb-0 text-primary">{{ attendance_percentage }}%</div>
+                <small class="text-muted">Today's Attendance Rate</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('current-time').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+</script>
+{% endblock %}

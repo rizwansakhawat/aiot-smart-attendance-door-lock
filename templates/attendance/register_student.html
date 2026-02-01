@@ -1,0 +1,1543 @@
+<!-- templates/attendance/register_student.html -->
+{% extends 'base.html' %}
+
+{% block title %}Register Student - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Registration Page Styles */
+    .registration-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    /* Step Indicator */
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 40px;
+        padding: 20px;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    }
+    
+    .step {
+        display: flex;
+        align-items: center;
+        color: #6c757d;
+        transition: all 0.3s;
+    }
+    
+    .step.active {
+        color: #4361ee;
+    }
+    
+    .step.completed {
+        color: #2ec4b6;
+    }
+    
+    .step-number {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-right: 12px;
+        transition: all 0.3s;
+    }
+    
+    .step.active .step-number {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        box-shadow: 0 5px 15px rgba(67, 97, 238, 0.4);
+    }
+    
+    .step.completed .step-number {
+        background: linear-gradient(135deg, #2ec4b6, #20a39e);
+        color: white;
+    }
+    
+    .step-text {
+        font-weight: 600;
+    }
+    
+    .step-connector {
+        width: 80px;
+        height: 3px;
+        background: #e9ecef;
+        margin: 0 20px;
+        border-radius: 3px;
+        transition: all 0.3s;
+    }
+    
+    .step.completed + .step-connector,
+    .step-connector.completed {
+        background: linear-gradient(135deg, #2ec4b6, #20a39e);
+    }
+    
+    /* Form Card */
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        padding: 35px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        margin-bottom: 30px;
+    }
+    
+    .form-card h4 {
+        color: #1a1a2e;
+        font-weight: 700;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .form-card h4 i {
+        color: #4361ee;
+        margin-right: 10px;
+    }
+    
+    /* Form Controls */
+    .form-label {
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+    }
+    
+    .form-label .required {
+        color: #e71d36;
+    }
+    
+    .form-control, .form-select {
+        border-radius: 10px;
+        padding: 14px 18px;
+        border: 2px solid #e9ecef;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.15);
+    }
+    
+    .form-control.is-valid {
+        border-color: #2ec4b6;
+    }
+    
+    .form-control.is-invalid {
+        border-color: #e71d36;
+    }
+    
+    /* Camera Section */
+    #video-container {
+        position: relative;
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        border-radius: 20px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    #video {
+        width: 100%;
+        display: block;
+        transform: scaleX(-1); /* Mirror effect */
+    }
+    
+    #canvas {
+        display: none;
+    }
+    
+    .video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+    }
+    
+    .face-guide {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 220px;
+        height: 280px;
+        border: 3px dashed rgba(255,255,255,0.5);
+        border-radius: 50%;
+    }
+    
+    .face-guide.detected {
+        border-color: #2ec4b6;
+        border-style: solid;
+        box-shadow: 0 0 30px rgba(46, 196, 182, 0.5);
+    }
+    
+    .capture-status {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 12px 25px;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        backdrop-filter: blur(10px);
+    }
+    
+    .capture-status.success {
+        background: rgba(46, 196, 182, 0.9);
+    }
+    
+    .capture-status.error {
+        background: rgba(231, 29, 54, 0.9);
+    }
+    
+    .capture-status.warning {
+        background: rgba(255, 159, 28, 0.9);
+    }
+    
+    /* Camera Header */
+    .camera-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 15px 20px;
+        background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .camera-header .camera-label {
+        font-weight: 600;
+    }
+    
+    .camera-header .camera-indicator {
+        display: flex;
+        align-items: center;
+    }
+    
+    .camera-header .recording-dot {
+        width: 12px;
+        height: 12px;
+        background: #e71d36;
+        border-radius: 50%;
+        margin-right: 8px;
+        animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    
+    /* Capture Button */
+    .capture-btn-container {
+        text-align: center;
+        margin-top: 25px;
+    }
+    
+    .capture-btn {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e71d36, #c9184a);
+        border: 5px solid white;
+        color: white;
+        font-size: 2rem;
+        box-shadow: 0 8px 30px rgba(231, 29, 54, 0.4);
+        transition: all 0.3s;
+        position: relative;
+    }
+    
+    .capture-btn:hover:not(:disabled) {
+        transform: scale(1.1);
+        box-shadow: 0 12px 40px rgba(231, 29, 54, 0.5);
+    }
+    
+    .capture-btn:active:not(:disabled) {
+        transform: scale(0.95);
+    }
+    
+    .capture-btn:disabled {
+        background: linear-gradient(135deg, #6c757d, #5a6268);
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+    
+    .capture-btn.capturing {
+        animation: pulse-capture 0.5s ease;
+    }
+    
+    @keyframes pulse-capture {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+    
+    /* Auto Capture Toggle */
+    .auto-capture-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 15px;
+        gap: 10px;
+    }
+    
+    .form-switch .form-check-input {
+        width: 50px;
+        height: 26px;
+        cursor: pointer;
+    }
+    
+    .form-switch .form-check-input:checked {
+        background-color: #2ec4b6;
+        border-color: #2ec4b6;
+    }
+    
+    /* Captured Images Gallery */
+    .captured-gallery {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 20px;
+        height: 100%;
+    }
+    
+    .captured-gallery h6 {
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 15px;
+    }
+    
+    .capture-progress {
+        margin-bottom: 20px;
+    }
+    
+    .capture-progress .progress {
+        height: 12px;
+        border-radius: 10px;
+        background: #e9ecef;
+    }
+    
+    .capture-progress .progress-bar {
+        background: linear-gradient(135deg, #2ec4b6, #20a39e);
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }
+    
+    .capture-progress .progress-text {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    
+    .captured-images {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .captured-image-item {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #e9ecef;
+        border: 3px solid transparent;
+    }
+    
+    .captured-image-item.filled {
+        border-color: #2ec4b6;
+    }
+    
+    .captured-image-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .captured-image-item .image-number {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    
+    .captured-image-item .remove-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: #e71d36;
+        color: white;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: none;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        cursor: pointer;
+    }
+    
+    .captured-image-item:hover .remove-btn {
+        display: flex;
+    }
+    
+    .capture-tips {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        font-size: 0.85rem;
+    }
+    
+    .capture-tips h6 {
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    
+    .capture-tips ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #6c757d;
+    }
+    
+    .capture-tips li {
+        margin-bottom: 5px;
+    }
+    
+    /* Confirmation Section */
+    .confirmation-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    }
+    
+    .student-preview {
+        text-align: center;
+        padding: 30px;
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .student-preview .avatar-large {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 5px solid #2ec4b6;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    
+    .student-preview h3 {
+        color: #1a1a2e;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+    
+    .student-preview .roll-number {
+        color: #6c757d;
+        font-size: 1.1rem;
+    }
+    
+    .info-table {
+        width: 100%;
+    }
+    
+    .info-table tr {
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .info-table tr:last-child {
+        border-bottom: none;
+    }
+    
+    .info-table th {
+        padding: 15px 10px;
+        color: #6c757d;
+        font-weight: 600;
+        width: 40%;
+        text-align: left;
+    }
+    
+    .info-table td {
+        padding: 15px 10px;
+        color: #1a1a2e;
+        font-weight: 500;
+    }
+    
+    .success-badge {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(46, 196, 182, 0.15);
+        color: #2ec4b6;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .success-badge i {
+        margin-right: 5px;
+    }
+    
+    /* Navigation Buttons */
+    .nav-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #f0f0f0;
+    }
+    
+    .btn-nav {
+        padding: 14px 30px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .btn-nav-back {
+        background: #f8f9fa;
+        color: #6c757d;
+        border: 2px solid #e9ecef;
+    }
+    
+    .btn-nav-back:hover {
+        background: #e9ecef;
+        color: #1a1a2e;
+    }
+    
+    .btn-nav-next {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        border: none;
+    }
+    
+    .btn-nav-next:hover:not(:disabled) {
+        background: linear-gradient(135deg, #3f37c9, #4361ee);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(67, 97, 238, 0.4);
+    }
+    
+    .btn-nav-next:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+    }
+    
+    .btn-nav-submit {
+        background: linear-gradient(135deg, #2ec4b6, #20a39e);
+        color: white;
+        border: none;
+        padding: 16px 40px;
+        font-size: 1.1rem;
+    }
+    
+    .btn-nav-submit:hover {
+        background: linear-gradient(135deg, #20a39e, #2ec4b6);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(46, 196, 182, 0.4);
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.95);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        flex-direction: column;
+    }
+    
+    .loading-overlay.show {
+        display: flex;
+    }
+    
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #e9ecef;
+        border-top-color: #4361ee;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+        font-size: 1.2rem;
+        color: #1a1a2e;
+        font-weight: 600;
+    }
+    
+    /* Responsive */
+    @media (max-width: 992px) {
+        .step-connector {
+            width: 40px;
+            margin: 0 10px;
+        }
+        
+        .step-text {
+            display: none;
+        }
+        
+        .captured-images {
+            grid-template-columns: repeat(5, 1fr);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .step-indicator {
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .step-connector {
+            display: none;
+        }
+        
+        .captured-images {
+            grid-template-columns: repeat(5, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="registration-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="bi bi-person-plus-fill"></i> Register New Student</h1>
+        <p>Add a new student or staff member to the face recognition attendance system</p>
+    </div>
+    
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step active" id="step1-indicator">
+            <div class="step-number">1</div>
+            <span class="step-text">Personal Information</span>
+        </div>
+        <div class="step-connector" id="connector1"></div>
+        <div class="step" id="step2-indicator">
+            <div class="step-number">2</div>
+            <span class="step-text">Capture Face</span>
+        </div>
+        <div class="step-connector" id="connector2"></div>
+        <div class="step" id="step3-indicator">
+            <div class="step-number">3</div>
+            <span class="step-text">Confirm & Save</span>
+        </div>
+    </div>
+    
+    <!-- Registration Form -->
+    <form method="POST" id="registration-form">
+        {% csrf_token %}
+        
+        <!-- Step 1: Personal Information -->
+        <div id="step1" class="step-content">
+            <div class="form-card">
+                <h4><i class="bi bi-person-badge"></i> Personal Information</h4>
+                
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            Full Name <span class="required">*</span>
+                        </label>
+                        <input type="text" 
+                               name="name" 
+                               id="name" 
+                               class="form-control" 
+                               placeholder="Enter full name"
+                               required>
+                        <div class="invalid-feedback">Please enter the student's name</div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            Roll Number / ID <span class="required">*</span>
+                        </label>
+                        <input type="text" 
+                               name="roll_number" 
+                               id="roll_number" 
+                               class="form-control" 
+                               placeholder="Enter roll number or employee ID"
+                               required>
+                        <div class="invalid-feedback">Please enter a roll number or ID</div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" 
+                               name="email" 
+                               id="email" 
+                               class="form-control" 
+                               placeholder="Enter email address (optional)">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" 
+                               name="phone" 
+                               id="phone" 
+                               class="form-control" 
+                               placeholder="Enter phone number (optional)">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Department</label>
+                        <select name="department" id="department" class="form-select">
+                            <option value="">Select Department</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept }}">{{ dept }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">User Type</label>
+                        <select name="user_type" id="user_type" class="form-select">
+                            {% for value, label in user_types %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="nav-buttons">
+                    <a href="{% url 'student_list' %}" class="btn btn-nav btn-nav-back">
+                        <i class="bi bi-arrow-left me-2"></i>Cancel
+                    </a>
+                    <button type="button" class="btn btn-nav btn-nav-next" onclick="goToStep(2)">
+                        Next: Capture Face <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 2: Face Capture -->
+        <div id="step2" class="step-content d-none">
+            <div class="form-card">
+                <h4><i class="bi bi-camera-fill"></i> Capture Face Images</h4>
+                
+                <!-- Instructions Alert -->
+                <div class="alert alert-info d-flex align-items-start mb-4">
+                    <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                    <div>
+                        <strong>Instructions:</strong> Capture at least <strong>5 images</strong> for accurate face recognition. 
+                        Look directly at the camera, then slowly turn your head left and right between captures. 
+                        Ensure your face is well-lit and clearly visible.
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- Camera Section -->
+                    <div class="col-lg-7 mb-4 mb-lg-0">
+                        <div id="video-container">
+                            <!-- Camera Header -->
+                            <div class="camera-header">
+                                <span class="camera-label">
+                                    <i class="bi bi-webcam me-2"></i>USB Camera
+                                </span>
+                                <div class="camera-indicator">
+                                    <div class="recording-dot"></div>
+                                    <span>LIVE</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Video Element -->
+                            <video id="video" autoplay playsinline></video>
+                            <canvas id="canvas"></canvas>
+                            
+                            <!-- Face Guide Overlay -->
+                            <div class="video-overlay">
+                                <div class="face-guide" id="face-guide"></div>
+                            </div>
+                            
+                            <!-- Status Message -->
+                            <div class="capture-status" id="capture-status">
+                                <i class="bi bi-hourglass-split me-2"></i>Initializing camera...
+                            </div>
+                        </div>
+                        
+                        <!-- Capture Button -->
+                        <div class="capture-btn-container">
+                            <button type="button" class="capture-btn" id="capture-btn" disabled>
+                                <i class="bi bi-camera-fill"></i>
+                            </button>
+                            <p class="text-muted mt-2 mb-0">Click to capture</p>
+                            
+                            <!-- Auto Capture Toggle -->
+                            <div class="auto-capture-toggle">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="auto-capture-toggle">
+                                    <label class="form-check-label" for="auto-capture-toggle">
+                                        Auto capture when face detected
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Captured Images Gallery -->
+                    <div class="col-lg-5">
+                        <div class="captured-gallery">
+                            <h6>
+                                <i class="bi bi-images me-2"></i>
+                                Captured Images
+                                <span class="badge bg-primary ms-2" id="capture-count">0</span>
+                                <span class="text-muted">/ 10</span>
+                            </h6>
+                            
+                            <!-- Progress Bar -->
+                            <div class="capture-progress">
+                                <div class="progress">
+                                    <div class="progress-bar" id="capture-progress" style="width: 0%"></div>
+                                </div>
+                                <div class="progress-text">
+                                    <span id="progress-status">Minimum: 5 images</span>
+                                    <span id="progress-percentage">0%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Grid -->
+                            <div class="captured-images" id="captured-images">
+                                {% for i in "0123456789" %}
+                                <div class="captured-image-item" id="img-slot-{{ forloop.counter0 }}">
+                                    <span class="image-number">{{ forloop.counter }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <!-- Clear Button -->
+                            <button type="button" class="btn btn-outline-danger btn-sm w-100 mb-3" 
+                                    id="clear-images-btn" style="display: none;">
+                                <i class="bi bi-trash me-2"></i>Clear All Images
+                            </button>
+                            
+                            <!-- Tips -->
+                            <div class="capture-tips">
+                                <h6><i class="bi bi-lightbulb me-2 text-warning"></i>Tips for best results:</h6>
+                                <ul>
+                                    <li>Ensure good lighting on your face</li>
+                                    <li>Look directly at the camera</li>
+                                    <li>Slowly turn head between captures</li>
+                                    <li>Remove glasses if possible</li>
+                                    <li>Keep a neutral expression</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="nav-buttons">
+                    <button type="button" class="btn btn-nav btn-nav-back" onclick="goToStep(1)">
+                        <i class="bi bi-arrow-left me-2"></i>Back
+                    </button>
+                    <button type="button" class="btn btn-nav btn-nav-next" id="next-to-step3" 
+                            onclick="goToStep(3)" disabled>
+                        Next: Review & Confirm <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 3: Confirmation -->
+        <div id="step3" class="step-content d-none">
+            <div class="form-card">
+                <h4><i class="bi bi-check-circle"></i> Review & Confirm</h4>
+                
+                <div class="row">
+                    <!-- Student Preview -->
+                    <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="student-preview">
+                            <img src="" alt="Student Photo" class="avatar-large" id="preview-image">
+                            <h3 id="preview-name">-</h3>
+                            <p class="roll-number" id="preview-roll">-</p>
+                            <div class="success-badge">
+                                <i class="bi bi-check-circle"></i>
+                                <span id="preview-images-count">0</span> face images captured
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Information Table -->
+                    <div class="col-md-8">
+                        <div class="confirmation-card">
+                            <table class="info-table">
+                                <tr>
+                                    <th><i class="bi bi-person me-2"></i>Full Name</th>
+                                    <td id="confirm-name">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-hash me-2"></i>Roll Number / ID</th>
+                                    <td id="confirm-roll">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-envelope me-2"></i>Email Address</th>
+                                    <td id="confirm-email">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-telephone me-2"></i>Phone Number</th>
+                                    <td id="confirm-phone">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-building me-2"></i>Department</th>
+                                    <td id="confirm-department">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-person-badge me-2"></i>User Type</th>
+                                    <td id="confirm-user-type">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-camera me-2"></i>Face Images</th>
+                                    <td>
+                                        <span class="success-badge" id="confirm-images">
+                                            <i class="bi bi-check-circle"></i>
+                                            0 images captured
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Hidden field for face encodings -->
+                <input type="hidden" name="face_encodings" id="face_encodings">
+                
+                <div class="nav-buttons">
+                    <button type="button" class="btn btn-nav btn-nav-back" onclick="goToStep(2)">
+                        <i class="bi bi-arrow-left me-2"></i>Back
+                    </button>
+                    <button type="submit" class="btn btn-nav btn-nav-submit" id="submit-btn">
+                        <i class="bi bi-check-lg me-2"></i>Register Student
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Processing registration...</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ═══════════════════════════════════════════════════════════════
+    // VARIABLES
+    // ═══════════════════════════════════════════════════════════════
+    
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const captureBtn = document.getElementById('capture-btn');
+    const captureStatus = document.getElementById('capture-status');
+    const captureCount = document.getElementById('capture-count');
+    const captureProgress = document.getElementById('capture-progress');
+    const faceGuide = document.getElementById('face-guide');
+    const autoCaptureToggle = document.getElementById('auto-capture-toggle');
+    const clearImagesBtn = document.getElementById('clear-images-btn');
+    const nextToStep3 = document.getElementById('next-to-step3');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    let stream = null;
+    let capturedEncodings = [];
+    let capturedThumbnails = [];
+    let isCapturing = false;
+    let autoCaptureInterval = null;
+    let lastCaptureTime = 0;
+    
+    const REQUIRED_IMAGES = 5;
+    const MAX_IMAGES = 10;
+    const AUTO_CAPTURE_DELAY = 1500;
+    
+    // ═══════════════════════════════════════════════════════════════
+    // CAMERA FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+    
+    async function startCamera() {
+        try {
+            updateStatus('<i class="bi bi-hourglass-split me-2"></i>Starting camera...', 'default');
+            console.log('Starting camera...');
+            
+            // Simple camera request
+            const constraints = {
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                }
+            };
+            
+            console.log('Requesting camera...');
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('Got stream:', stream);
+            
+            video.srcObject = stream;
+            
+            video.onloadedmetadata = () => {
+                console.log('Video ready:', video.videoWidth, 'x', video.videoHeight);
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                captureBtn.disabled = false;
+                updateStatus('<i class="bi bi-camera-fill me-2"></i>Camera ready! Position your face in the circle', 'success');
+            };
+            
+            video.onerror = (e) => {
+                console.error('Video error:', e);
+                updateStatus('Video error', 'error');
+            };
+            
+        } catch (error) {
+            console.error('Camera error:', error);
+            
+            let message = 'Camera error: ' + error.message;
+            
+            if (error.name === 'NotAllowedError') {
+                message = 'Camera permission denied. Please allow camera access and refresh.';
+            } else if (error.name === 'NotFoundError') {
+                message = 'No camera found. Please connect a camera.';
+            } else if (error.name === 'NotReadableError') {
+                message = 'Camera is in use by another application.';
+            }
+            
+            updateStatus('<i class="bi bi-exclamation-triangle me-2"></i>' + message, 'error');
+            showAlert(`<strong>❌ ${message}</strong><br><br>
+                <strong>Try:</strong>
+                <ol>
+                    <li>Click 🔒 in address bar → Allow camera</li>
+                    <li>Close other apps using camera</li>
+                    <li>Refresh page (F5)</li>
+                </ol>`, 'danger');
+        }
+    }
+    
+    function stopCamera() {
+        console.log('Stopping camera...');
+        
+        // Stop video stream
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                track.stop();
+                console.log('Track stopped:', track.kind);
+            });
+            stream = null;
+        }
+        
+        // Clear video element
+        if (video) {
+            video.srcObject = null;
+        }
+        
+        // Stop auto capture
+        stopAutoCapture();
+        
+        console.log('Camera stopped');
+    }
+    
+    function stopAutoCapture() {
+        if (autoCaptureInterval) {
+            clearInterval(autoCaptureInterval);
+            autoCaptureInterval = null;
+        }
+    }
+    
+    function startAutoCapture() {
+        if (autoCaptureInterval) return;
+        
+        autoCaptureInterval = setInterval(() => {
+            if (capturedEncodings.length < MAX_IMAGES && !isCapturing) {
+                const now = Date.now();
+                if (now - lastCaptureTime >= AUTO_CAPTURE_DELAY) {
+                    captureImage();
+                    lastCaptureTime = now;
+                }
+            } else if (capturedEncodings.length >= MAX_IMAGES) {
+                stopAutoCapture();
+            }
+        }, 500);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // STEP NAVIGATION
+    // ═══════════════════════════════════════════════════════════════
+    
+    function goToStep(step) {
+        console.log('Going to step:', step);
+        
+        // Validate step 1 before proceeding to step 2
+        if (step === 2) {
+            const name = document.getElementById('name').value.trim();
+            const roll = document.getElementById('roll_number').value.trim();
+            
+            if (!name) {
+                showAlert('Please enter the student\'s full name', 'danger');
+                document.getElementById('name').focus();
+                return;
+            }
+            
+            if (!roll) {
+                showAlert('Please enter the roll number or ID', 'danger');
+                document.getElementById('roll_number').focus();
+                return;
+            }
+            
+            // Start camera when going to step 2
+            startCamera();
+        }
+        
+        // Validate step 2 before proceeding to step 3
+        if (step === 3) {
+            if (capturedEncodings.length < REQUIRED_IMAGES) {
+                showAlert(`Please capture at least ${REQUIRED_IMAGES} face images`, 'warning');
+                return;
+            }
+            
+            // Update confirmation page
+            updateConfirmation();
+            
+            // Stop camera when leaving step 2
+            stopCamera();
+        }
+        
+        // If going back to step 2 from step 3, restart camera
+        if (step === 2) {
+            const step3 = document.getElementById('step3');
+            if (step3 && !step3.classList.contains('d-none')) {
+                startCamera();
+            }
+        }
+        
+        // If going back to step 1, stop camera
+        if (step === 1) {
+            stopCamera();
+        }
+        
+        // Hide all steps
+        document.querySelectorAll('.step-content').forEach(el => {
+            el.classList.add('d-none');
+        });
+        
+        // Show selected step
+        const targetStep = document.getElementById('step' + step);
+        if (targetStep) {
+            targetStep.classList.remove('d-none');
+        }
+        
+        // Update step indicators
+        updateStepIndicators(step);
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    function updateStepIndicators(currentStep) {
+        for (let i = 1; i <= 3; i++) {
+            const indicator = document.getElementById('step' + i + '-indicator');
+            const connector = document.getElementById('connector' + (i - 1));
+            
+            if (indicator) {
+                indicator.classList.remove('active', 'completed');
+                
+                if (i < currentStep) {
+                    indicator.classList.add('completed');
+                } else if (i === currentStep) {
+                    indicator.classList.add('active');
+                }
+            }
+            
+            if (connector) {
+                if (i < currentStep) {
+                    connector.classList.add('completed');
+                } else {
+                    connector.classList.remove('completed');
+                }
+            }
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // CAPTURE FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+    
+    async function captureImage() {
+        if (isCapturing || capturedEncodings.length >= MAX_IMAGES) return;
+        
+        isCapturing = true;
+        captureBtn.disabled = true;
+        captureBtn.classList.add('capturing');
+        
+        try {
+            // Draw current frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Get image data as base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+            
+            updateStatus('<i class="bi bi-hourglass-split me-2"></i>Processing face...', 'default');
+            
+            // Send to server for face detection
+            const response = await fetch('{% url "capture_face_api" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: imageData })
+            });
+            
+            const result = await response.json();
+            console.log('Capture result:', result);
+            
+            if (result.success) {
+                // Store encoding
+                capturedEncodings.push(result.encoding);
+                
+                // Store thumbnail
+                capturedThumbnails.push(imageData);
+                
+                // Update UI
+                updateCapturedImages();
+                updateProgress();
+                
+                // Visual feedback
+                if (faceGuide) {
+                    faceGuide.classList.add('detected');
+                    setTimeout(() => faceGuide.classList.remove('detected'), 500);
+                }
+                
+                updateStatus(`<i class="bi bi-check-circle me-2"></i>Image ${capturedEncodings.length} captured!`, 'success');
+                
+                // Check if we have enough images
+                if (capturedEncodings.length >= REQUIRED_IMAGES) {
+                    nextToStep3.disabled = false;
+                }
+                
+                if (capturedEncodings.length >= MAX_IMAGES) {
+                    updateStatus('<i class="bi bi-check-circle me-2"></i>Maximum images captured!', 'success');
+                    if (autoCaptureToggle) {
+                        autoCaptureToggle.checked = false;
+                    }
+                    stopAutoCapture();
+                }
+                
+            } else {
+                updateStatus('<i class="bi bi-exclamation-triangle me-2"></i>' + (result.error || 'No face detected'), 'warning');
+                if (faceGuide) {
+                    faceGuide.classList.remove('detected');
+                }
+            }
+            
+        } catch (error) {
+            console.error('Capture error:', error);
+            updateStatus('<i class="bi bi-exclamation-triangle me-2"></i>Capture failed: ' + error.message, 'error');
+        }
+        
+        isCapturing = false;
+        captureBtn.disabled = capturedEncodings.length >= MAX_IMAGES;
+        captureBtn.classList.remove('capturing');
+    }
+    
+    function updateCapturedImages() {
+        for (let i = 0; i < MAX_IMAGES; i++) {
+            const slot = document.getElementById('img-slot-' + i);
+            if (!slot) continue;
+            
+            if (i < capturedThumbnails.length) {
+                slot.classList.add('filled');
+                slot.innerHTML = `
+                    <img src="${capturedThumbnails[i]}" alt="Capture ${i + 1}">
+                    <span class="image-number">${i + 1}</span>
+                    <button type="button" class="remove-btn" onclick="removeImage(${i})">
+                        <i class="bi bi-x"></i>
+                    </button>
+                `;
+            } else {
+                slot.classList.remove('filled');
+                slot.innerHTML = `<span class="image-number">${i + 1}</span>`;
+            }
+        }
+        
+        // Update count badge
+        if (captureCount) {
+            captureCount.textContent = capturedEncodings.length;
+        }
+        
+        // Show/hide clear button
+        if (clearImagesBtn) {
+            clearImagesBtn.style.display = capturedEncodings.length > 0 ? 'block' : 'none';
+        }
+    }
+    
+    function updateProgress() {
+        const percentage = Math.min((capturedEncodings.length / REQUIRED_IMAGES) * 100, 100);
+        
+        if (captureProgress) {
+            captureProgress.style.width = percentage + '%';
+        }
+        
+        const progressPercentage = document.getElementById('progress-percentage');
+        if (progressPercentage) {
+            progressPercentage.textContent = Math.round(percentage) + '%';
+        }
+        
+        const progressStatus = document.getElementById('progress-status');
+        if (progressStatus) {
+            if (capturedEncodings.length >= REQUIRED_IMAGES) {
+                progressStatus.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i>Minimum images captured!';
+                if (captureProgress) {
+                    captureProgress.classList.remove('bg-primary');
+                    captureProgress.classList.add('bg-success');
+                }
+            } else {
+                progressStatus.textContent = `Need ${REQUIRED_IMAGES - capturedEncodings.length} more image(s)`;
+            }
+        }
+    }
+    
+    function removeImage(index) {
+        capturedEncodings.splice(index, 1);
+        capturedThumbnails.splice(index, 1);
+        updateCapturedImages();
+        updateProgress();
+        
+        // Update button states
+        if (nextToStep3) {
+            nextToStep3.disabled = capturedEncodings.length < REQUIRED_IMAGES;
+        }
+        captureBtn.disabled = false;
+        
+        updateStatus('<i class="bi bi-info-circle me-2"></i>Image removed. Continue capturing.', 'default');
+    }
+    
+    function clearAllImages() {
+        if (confirm('Are you sure you want to clear all captured images?')) {
+            capturedEncodings = [];
+            capturedThumbnails = [];
+            updateCapturedImages();
+            updateProgress();
+            
+            if (nextToStep3) {
+                nextToStep3.disabled = true;
+            }
+            captureBtn.disabled = false;
+            
+            updateStatus('<i class="bi bi-info-circle me-2"></i>All images cleared. Start capturing again.', 'default');
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // CONFIRMATION
+    // ═══════════════════════════════════════════════════════════════
+    
+    function updateConfirmation() {
+        const name = document.getElementById('name').value.trim();
+        const roll = document.getElementById('roll_number').value.trim();
+        const email = document.getElementById('email').value.trim() || 'Not provided';
+        const phone = document.getElementById('phone').value.trim() || 'Not provided';
+        const department = document.getElementById('department').value || 'Not specified';
+        const userType = document.getElementById('user_type');
+        const userTypeText = userType ? userType.options[userType.selectedIndex].text : 'Student';
+        
+        // Update preview section
+        const previewName = document.getElementById('preview-name');
+        const previewRoll = document.getElementById('preview-roll');
+        const previewImagesCount = document.getElementById('preview-images-count');
+        const previewImage = document.getElementById('preview-image');
+        
+        if (previewName) previewName.textContent = name;
+        if (previewRoll) previewRoll.textContent = roll;
+        if (previewImagesCount) previewImagesCount.textContent = capturedEncodings.length;
+        
+        if (previewImage && capturedThumbnails.length > 0) {
+            previewImage.src = capturedThumbnails[0];
+        }
+        
+        // Update confirmation table
+        const confirmName = document.getElementById('confirm-name');
+        const confirmRoll = document.getElementById('confirm-roll');
+        const confirmEmail = document.getElementById('confirm-email');
+        const confirmPhone = document.getElementById('confirm-phone');
+        const confirmDepartment = document.getElementById('confirm-department');
+        const confirmUserType = document.getElementById('confirm-user-type');
+        const confirmImages = document.getElementById('confirm-images');
+        
+        if (confirmName) confirmName.textContent = name;
+        if (confirmRoll) confirmRoll.textContent = roll;
+        if (confirmEmail) confirmEmail.textContent = email;
+        if (confirmPhone) confirmPhone.textContent = phone;
+        if (confirmDepartment) confirmDepartment.textContent = department;
+        if (confirmUserType) confirmUserType.textContent = userTypeText;
+        if (confirmImages) {
+            confirmImages.innerHTML = `<i class="bi bi-check-circle me-1"></i>${capturedEncodings.length} images captured`;
+        }
+        
+        // Set face encodings JSON for form submission
+        const faceEncodingsInput = document.getElementById('face_encodings');
+        if (faceEncodingsInput) {
+            faceEncodingsInput.value = JSON.stringify(capturedEncodings);
+        }
+    }
+    
+    // ═══════���═══════════════════════════════════════════════════════
+    // UTILITY FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+    
+    function updateStatus(message, type = 'default') {
+        if (!captureStatus) return;
+        
+        captureStatus.className = 'capture-status';
+        
+        if (type === 'success') {
+            captureStatus.classList.add('success');
+        } else if (type === 'error') {
+            captureStatus.classList.add('error');
+        } else if (type === 'warning') {
+            captureStatus.classList.add('warning');
+        }
+        
+        captureStatus.innerHTML = message;
+    }
+    
+    function showAlert(message, type = 'info') {
+        // Remove existing alerts
+        const existingAlerts = document.querySelectorAll('.alert-auto-dismiss');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-auto-dismiss`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.main-content');
+        if (container) {
+            container.insertBefore(alertDiv, container.firstChild);
+        }
+        
+        // Auto dismiss after 8 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 8000);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // EVENT LISTENERS
+    // ═══════════════════════════════════════════════════════════════
+    
+    // Capture button click
+    if (captureBtn) {
+        captureBtn.addEventListener('click', captureImage);
+    }
+    
+    // Auto capture toggle
+    if (autoCaptureToggle) {
+        autoCaptureToggle.addEventListener('change', function() {
+            if (this.checked) {
+                startAutoCapture();
+                updateStatus('<i class="bi bi-camera-fill me-2"></i>Auto capture enabled - Keep your face in the frame', 'success');
+            } else {
+                stopAutoCapture();
+                updateStatus('<i class="bi bi-camera-fill me-2"></i>Auto capture disabled', 'default');
+            }
+        });
+    }
+    
+    // Clear images button
+    if (clearImagesBtn) {
+        clearImagesBtn.addEventListener('click', clearAllImages);
+    }
+    
+    // Form submission
+    const registrationForm = document.getElementById('registration-form');
+    if (registrationForm) {
+        registrationForm.addEventListener('submit', function(e) {
+            // Validate
+            if (capturedEncodings.length < REQUIRED_IMAGES) {
+                e.preventDefault();
+                showAlert(`Please capture at least ${REQUIRED_IMAGES} face images`, 'warning');
+                return;
+            }
+            
+            // Show loading overlay
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('show');
+            }
+        });
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Space bar to capture (when on step 2)
+        const step2 = document.getElementById('step2');
+        if (e.code === 'Space' && step2 && !step2.classList.contains('d-none')) {
+            e.preventDefault();
+            if (captureBtn && !captureBtn.disabled) {
+                captureImage();
+            }
+        }
+    });
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        stopCamera();
+    });
+    
+    // ═══════════════════════════════════════════════════════════════
+    // INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Registration page loaded');
+        updateProgress();
+        
+        // Ensure we start at step 1
+        goToStep(1);
+    });
+</script>
+{% endblock %}

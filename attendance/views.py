@@ -363,13 +363,14 @@ def student_detail(request, pk):
     """
     student = get_object_or_404(Student, pk=pk)
     
-    # Get attendance history
-    attendance_records = Attendance.objects.filter(
-        student=student
-    ).order_by('-timestamp')[:50]
+    # Get all attendance for statistics (before slicing)
+    all_attendance = Attendance.objects.filter(
+        student=student,
+        entry_type='success'
+    )
     
-    # Calculate statistics
-    total_days = attendance_records.values('timestamp__date').distinct().count()
+    # Calculate total days (before slicing)
+    total_days = all_attendance.values('timestamp__date').distinct().count()
     
     # Get attendance for last 30 days
     thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -379,6 +380,11 @@ def student_detail(request, pk):
         entry_type='success'
     ).values('timestamp__date').distinct().count()
     
+    # Get attendance records for display (with slicing - AFTER distinct calculations)
+    attendance_records = Attendance.objects.filter(
+        student=student
+    ).order_by('-timestamp')[:50]
+    
     context = {
         'student': student,
         'attendance_records': attendance_records,
@@ -387,7 +393,6 @@ def student_detail(request, pk):
     }
     
     return render(request, 'attendance/student_detail.html', context)
-
 
 def delete_student(request, pk):
     """

@@ -721,6 +721,35 @@
                                class="form-control" 
                                placeholder="Enter phone number (optional)">
                     </div>
+
+                    <!-- Add after phone field in Step 1 -->
+                    <div class="col-12">
+                        <hr class="my-3">
+                        <h6 class="text-primary"><i class="bi bi-key me-2"></i>Login Account (Optional)</h6>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Username</label>
+                        <input type="text" name="custom_username" id="custom_username" class="form-control" 
+                            placeholder="Leave empty for auto-generate">
+                        <small class="text-muted">Auto-generated from roll number if empty</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Password</label>
+                        <input type="text" name="custom_password" id="custom_password" class="form-control" 
+                            placeholder="Leave empty for auto-generate">
+                        <small class="text-muted">Auto-generated if empty</small>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="create_account" id="create_account" checked>
+                            <label class="form-check-label" for="create_account">
+                                Create login account for this student
+                            </label>
+                        </div>
+                    </div>
                     
                     <div class="col-md-6">
                         <label class="form-label">Department</label>

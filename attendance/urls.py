@@ -1,16 +1,15 @@
-# attendance/urls.py
-"""
-URL Configuration for Attendance App
-"""
-
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Dashboard
+    # Authentication
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    
+    # Dashboard (auto-routes to admin or user dashboard)
     path('', views.dashboard, name='dashboard'),
     
-    # Student Management
+    # Student Management (Admin only)
     path('students/', views.student_list, name='student_list'),
     path('students/register/', views.register_student, name='register_student'),
     path('students/<int:pk>/', views.student_detail, name='student_detail'),
@@ -20,11 +19,11 @@ urlpatterns = [
     # Attendance
     path('attendance/', views.attendance_list, name='attendance_list'),
     
-    # Reports
+    # Reports (Admin only)
     path('reports/', views.reports, name='reports'),
     path('reports/generate/', views.generate_report, name='generate_report'),
     
-    # System Logs
+    # System Logs (Admin only)
     path('logs/', views.system_logs, name='system_logs'),
     
     # API Endpoints

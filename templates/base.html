@@ -37,70 +37,144 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 260px;
+            width: 280px;
             height: 100vh;
-            background: linear-gradient(180deg, var(--dark-color) 0%, #16213e 100%);
-            padding: 20px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f1419 100%);
+            padding: 0;
             z-index: 1000;
             overflow-y: auto;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
         
         .sidebar-brand {
             color: white;
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            padding: 15px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 20px;
+            padding: 25px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 2px solid rgba(46, 196, 182, 0.3);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         .sidebar-brand i {
             color: var(--success-color);
+            font-size: 1.8rem;
+            filter: drop-shadow(0 0 10px rgba(46, 196, 182, 0.5));
         }
         
         .sidebar-menu {
             list-style: none;
-            padding: 0;
+            padding: 15px 12px 180px 12px;
             margin: 0;
         }
         
         .sidebar-menu li {
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .sidebar-menu a {
             display: flex;
             align-items: center;
-            padding: 12px 15px;
-            color: rgba(255,255,255,0.7);
+            padding: 14px 16px;
+            color: rgba(255,255,255,0.65);
             text-decoration: none;
-            border-radius: 8px;
-            transition: all 0.3s;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            font-size: 0.95rem;
+            position: relative;
+            overflow: hidden;
         }
         
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            background: rgba(255,255,255,0.1);
+        .sidebar-menu a::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--success-color);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background: rgba(255,255,255,0.12);
             color: white;
+            transform: translateX(4px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-menu a.active {
+            background: linear-gradient(135deg, rgba(67, 97, 238, 0.2), rgba(46, 196, 182, 0.2));
+            color: white;
+            border: 1px solid rgba(46, 196, 182, 0.3);
+            box-shadow: 0 4px 20px rgba(46, 196, 182, 0.15);
+        }
+        
+        .sidebar-menu a.active::before {
+            transform: scaleY(1);
         }
         
         .sidebar-menu a i {
-            margin-right: 12px;
-            font-size: 1.2rem;
+            margin-right: 14px;
+            font-size: 1.3rem;
+            width: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-menu a:hover i {
+            transform: scale(1.1);
+            color: var(--success-color);
+        }
+        
+        .sidebar-menu a.active i {
+            color: var(--success-color);
         }
         
         .sidebar-menu .menu-header {
-            color: rgba(255,255,255,0.4);
-            font-size: 0.75rem;
+            color: rgba(255,255,255,0.35);
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 15px 15px 10px;
-            margin-top: 10px;
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            padding: 20px 16px 10px;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .sidebar-menu .menu-header:first-of-type {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 10px;
         }
         
         /* Main Content */
         .main-content {
-            margin-left: 260px;
+            margin-left: 280px;
             padding: 30px;
             min-height: 100vh;
         }
@@ -270,14 +344,16 @@
         <div class="sidebar-brand">
             <i class="bi bi-shield-check"></i> Smart Attendance
         </div>
-        
-        <ul class="sidebar-menu">
+
+                <ul class="sidebar-menu">
             <li>
                 <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                     <i class="bi bi-grid-1x2-fill"></i> Dashboard
                 </a>
             </li>
             
+            {% if user.is_staff %}
+            <!-- Admin Only Menu -->
             <li class="menu-header">Student Management</li>
             
             <li>
@@ -290,14 +366,19 @@
                     <i class="bi bi-people-fill"></i> All Students
                 </a>
             </li>
+            {% endif %}
             
             <li class="menu-header">Attendance</li>
             
             <li>
                 <a href="{% url 'attendance_list' %}" class="{% if request.resolver_match.url_name == 'attendance_list' %}active{% endif %}">
-                    <i class="bi bi-calendar-check-fill"></i> Attendance Records
+                    <i class="bi bi-calendar-check-fill"></i> 
+                    {% if user.is_staff %}Attendance Records{% else %}My Attendance{% endif %}
                 </a>
             </li>
+            
+            {% if user.is_staff %}
+            <!-- Admin Only -->
             <li>
                 <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph-fill"></i> Reports
@@ -316,16 +397,40 @@
                     <i class="bi bi-gear-fill"></i> Admin Panel
                 </a>
             </li>
+            {% endif %}
         </ul>
+        
+        {% if user.is_authenticated %}
+        <div style="position: fixed; bottom: 0; left: 0; width: 280px; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%); backdrop-filter: blur(10px); z-index: 1001;">
+            <div class="d-flex align-items-center mb-3">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #4361ee, #3f37c9); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.2rem; margin-right: 12px; box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3); border: 2px solid rgba(255,255,255,0.2);">
+                    {{ user.username|slice:":1"|upper }}
+                </div>
+                <div style="flex: 1; overflow: hidden;">
+                    <div style="color: white; font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {{ user.get_full_name|default:user.username }}
+                    </div>
+                    <small style="color: rgba(255,255,255,0.7); font-size: 0.75rem; display: inline-block; padding: 2px 8px; background: rgba(46, 196, 182, 0.2); border-radius: 4px; border: 1px solid rgba(46, 196, 182, 0.3);">
+                        <i class="bi bi-{% if user.is_staff %}shield-check{% else %}person{% endif %}" style="font-size: 0.7rem;"></i>
+                        {% if user.is_staff %}Admin{% else %}User{% endif %}
+                    </small>
+                </div>
+            </div>
+            <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm w-100" style="border-radius: 8px; padding: 10px; font-weight: 500; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.3);" onmouseover="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.5)';" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255,255,255,0.3)';">
+                <i class="bi bi-box-arrow-left me-2"></i>Logout
+            </a>
+        </div>
+        {% endif %}
     </nav>
     
+    <!-- Main Content -->
     <!-- Main Content -->
     <main class="main-content">
         <!-- Messages -->
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                    {{ message|safe }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}

@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User  
 import json
 
 class Student(models.Model):
@@ -10,6 +11,15 @@ class Student(models.Model):
         ('staff', 'Staff'),
         ('visitor', 'Visitor'),
     ]
+    
+    #  Link to Django User for login
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='student_profile'
+    )
     
     name = models.CharField(max_length=100, verbose_name="Full Name")
     roll_number = models.CharField(max_length=50, unique=True, verbose_name="Roll Number/ID")
@@ -73,14 +83,6 @@ class Attendance(models.Model):
         if self.student:
             return f"{self.student.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
         return f"Unknown - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
-    
-    @property
-    def date(self):
-        return self.timestamp.date()
-    
-    @property
-    def time(self):
-        return self.timestamp.time()
 
 
 class SystemLog(models.Model):

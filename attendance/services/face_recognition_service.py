@@ -23,12 +23,13 @@ from typing import Optional, List, Tuple, Dict, Any
 # ═══════════════════════════════════════════════════════════════════
 # CAMERA CONFIGURATION - IMPORTANT!
 # ═══════════════════════════════════════════════════════════════════
-# Your laptop camera (index 0) causes blue screen errors
-# Only USB camera (index 1) should be used
+# Your laptop camera (index 1) causes blue screen errors
+# Only USB camera (index 0) should be used
 
-BROKEN_CAMERA_INDEX = 0   # ❌ Laptop camera - DO NOT USE (blue screen)
-USB_CAMERA_INDEX = 1      # ✅ USB camera - SAFE TO USE
-DEFAULT_CAMERA_INDEX = USB_CAMERA_INDEX  # Always use USB camera
+BROKEN_CAMERA_INDEX = 0
+WORKING_CAMERA_INDEX = 0 # No broken camera
+USB_CAMERA_INDEX = 0      # ✅ Your working camera
+DEFAULT_CAMERA_INDEX = 0  # ✅ Use Camera 0
 
 # ═══════════════════════════════════════════════════════════════════
 
@@ -92,30 +93,16 @@ class FaceRecognitionService:
     def __init__(self, tolerance: float = 0.6, model: str = 'hog', camera_index: int = None):
         """
         Initialize Face Recognition Service
-        
-        Args:
-            tolerance: Recognition threshold (lower = stricter)
-                      0.4 = very strict
-                      0.6 = balanced (recommended)
-                      0.7 = more lenient
-            model: Face detection model
-                   'hog' = fast (recommended for CPU)
-                   'cnn' = accurate (requires GPU)
-            camera_index: Camera to use (default: USB camera = 1)
-                         ⚠️ Index 0 (laptop camera) is disabled
         """
         self.tolerance = tolerance
-        self.model = model  # 'hog' is faster, 'cnn' is more accurate
+        self.model = model
         
-        # Camera configuration - ALWAYS use USB camera
+        # Camera configuration - Use Camera 0
         if camera_index is None:
-            self.camera_index = get_camera_index()
-        elif camera_index == BROKEN_CAMERA_INDEX:
-            print("⚠️ WARNING: Camera index 0 disabled (laptop camera causes blue screen)")
-            print("   Using USB camera (index 1) instead")
-            self.camera_index = USB_CAMERA_INDEX
+            self.camera_index = 0  # ✅ Default to Camera 0
         else:
             self.camera_index = camera_index
+        
         
         # Cache for registered faces (Level 1 Optimization)
         self.known_face_encodings: List[np.ndarray] = []
@@ -510,51 +497,30 @@ class FaceRecognitionService:
     
     def _get_safe_camera_index(self, requested_index: int = None) -> int:
         """
-        Get safe camera index (always returns USB camera)
-        
-        Args:
-            requested_index: Requested camera index
-        
-        Returns:
-            Safe camera index (USB camera)
+        Get safe camera index
         """
         if requested_index is None:
-            return self.camera_index
-        
-        # Safety check: never use broken laptop camera
-        if requested_index == BROKEN_CAMERA_INDEX:
-            print("⚠️ WARNING: Laptop camera (index 0) is disabled!")
-            print("   Using USB camera (index 1) instead")
-            return USB_CAMERA_INDEX
-        
+            return 0  # ✅ Always use Camera 0
         return requested_index
     
-    def capture_from_camera(self, camera_index: int = None, 
-                           num_frames: int = 1) -> List[np.ndarray]:
+    def capture_from_camera(self, camera_index: int = None, num_frames: int = 1) -> List[np.ndarray]:
         """
-        Capture images from USB camera
-        
-        ⚠️ NOTE: Laptop camera (index 0) is disabled
-        
-        Args:
-            camera_index: Camera device index (default: USB camera = 1)
-                         Index 0 will be automatically redirected to index 1
-            num_frames: Number of frames to capture
-        
-        Returns:
-            List of captured images as numpy arrays
+        Capture images from camera
         """
         images = []
         
-        # Get safe camera index (always USB camera)
-        safe_index = self._get_safe_camera_index(camera_index)
+        # Always use Camera 0
+        if camera_index is None:
+            camera_index = 0
         
-        print(f"\n📷 Opening camera (index {safe_index} - USB Camera)...")
+        print(f"\n📷 Opening camera {camera_index}...")
         
-        cap = cv2.VideoCapture(safe_index)
+        cap = cv2.VideoCapture(camera_index)
+        
+
         
         if not cap.isOpened():
-            print(f"❌ Cannot open USB camera (index {safe_index})")
+            print(f"❌ Cannot open camera (index {camera_index})")
             print("\n🔧 Troubleshooting:")
             print("   1. Check USB camera is connected")
             print("   2. Try unplugging and reconnecting")

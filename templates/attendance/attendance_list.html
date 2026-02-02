@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance Records - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        margin-bottom: 30px;
+    }
+    
+    .table-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+    
+    .table-card .card-header {
+        background: white;
+        padding: 20px 25px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        color: #6c757d;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 15px 20px;
+        border: none;
+    }
+    
+    .table td {
+        padding: 15px 20px;
+        vertical-align: middle;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .avatar-sm {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .status-badge.success {
+        background: rgba(46, 196, 182, 0.15);
+        color: #2ec4b6;
+    }
+    
+    .status-badge.danger {
+        background: rgba(231, 29, 54, 0.15);
+        color: #e71d36;
+    }
+    
+    .stats-bar {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-box {
+        background: white;
+        border-radius: 15px;
+        padding: 20px 30px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .stat-box .icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        color: white;
+    }
+    
+    .stat-box .icon.primary { background: linear-gradient(135deg, #4361ee, #3f37c9); }
+    .stat-box .icon.success { background: linear-gradient(135deg, #2ec4b6, #20a39e); }
+    .stat-box .icon.danger { background: linear-gradient(135deg, #e71d36, #c9184a); }
+    
+    .stat-box .number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1a1a2e;
+    }
+    
+    .stat-box .label {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        color: #e9ecef;
+        margin-bottom: 20px;
+    }
+    
+    .pagination .page-link {
+        border-radius: 8px;
+        margin: 0 3px;
+        border: none;
+        color: #4361ee;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar-check-fill"></i> Attendance Records</h1>
+    <p>View and filter all attendance entries</p>
+</div>
+
+<!-- Stats Bar -->
+<div class="stats-bar">
+    <div class="stat-box">
+        <div class="icon primary">
+            <i class="bi bi-list-check"></i>
+        </div>
+        <div>
+            <div class="number">{{ total_records }}</div>
+            <div class="label">Total Records</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="filter-card">
+    <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label">From Date</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">To Date</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Student</label>
+            <select name="student" class="form-select">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.pk }}" {% if selected_student == s.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ s.name }} ({{ s.roll_number }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Status</label>
+            <select name="entry_type" class="form-select">
+                <option value="">All Status</option>
+                <option value="success" {% if selected_entry_type == 'success' %}selected{% endif %}>Success</option>
+                <option value="denied" {% if selected_entry_type == 'denied' %}selected{% endif %}>Denied</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-search me-2"></i>Filter
+            </button>
+        </div>
+        <div class="col-md-1">
+            <a href="{% url 'attendance_list' %}" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-x-lg"></i>
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Attendance Table -->
+<div class="table-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>Records</h5>
+        <span class="badge bg-primary">{{ total_records }} entries</span>
+    </div>
+    
+    {% if records %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Roll Number</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-sm me-3">
+                                {% if record.student %}
+                                    {{ record.student.name|slice:":1"|upper }}
+                                {% else %}
+                                    ?
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if record.student %}
+                                    <a href="{% url 'student_detail' record.student.pk %}" class="text-decoration-none">
+                                        <strong>{{ record.student.name }}</strong>
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ record.student.roll_number|default:"-" }}</td>
+                    <td>{{ record.timestamp|date:"M d, Y" }}</td>
+                    <td>{{ record.timestamp|time:"H:i:s" }}</td>
+                    <td>
+                        {% if record.entry_type == 'success' %}
+                            <span class="status-badge success">
+                                <i class="bi bi-check-circle me-1"></i>Success
+                            </span>
+                        {% else %}
+                            <span class="status-badge danger">
+                                <i class="bi bi-x-circle me-1"></i>Denied
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.location }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="p-3">
+        <nav>
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_student %}&student={{ selected_student }}{% endif %}{% if selected_entry_type %}&entry_type={{ selected_entry_type }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                {% endif %}
+                
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                </li>
+                
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_student %}&student={{ selected_student }}{% endif %}{% if selected_entry_type %}&entry_type={{ selected_entry_type }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-calendar-x"></i>
+        <h4>No Records Found</h4>
+        <p class="text-muted">No attendance records match your filter criteria.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

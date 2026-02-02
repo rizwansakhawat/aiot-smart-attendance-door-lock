@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Student - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Delete Student
+                </h5>
+            </div>
+            <div class="card-body text-center py-5">
+                <div class="mb-4">
+                    <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center" 
+                         style="width: 80px; height: 80px;">
+                        <i class="bi bi-person-x text-danger fs-1"></i>
+                    </div>
+                </div>
+                
+                <h4 class="mb-3">Are you sure you want to delete?</h4>
+                
+                <div class="alert alert-light mb-4">
+                    <strong>{{ student.name }}</strong><br>
+                    <small class="text-muted">{{ student.roll_number }}</small>
+                </div>
+                
+                <p class="text-muted mb-4">
+                    This action cannot be undone. All attendance records for this student will also be deleted.
+                </p>
+                
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="d-flex gap-3 justify-content-center">
+                        <a href="{% url 'student_list' %}" class="btn btn-secondary px-4">
+                            <i class="bi bi-x me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger px-4">
+                            <i class="bi bi-trash me-2"></i>Yes, Delete
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

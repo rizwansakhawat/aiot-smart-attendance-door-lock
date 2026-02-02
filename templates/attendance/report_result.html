@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Report Results - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-header {
+        background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
+        border-radius: 15px;
+        padding: 30px;
+        color: white;
+        margin-bottom: 30px;
+    }
+    
+    .table-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+    
+    .table-card .card-header {
+        background: white;
+        padding: 20px 25px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+    
+    @media print {
+        .no-print { display: none !important; }
+        .table-card { box-shadow: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print">
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <div>
+            <h1><i class="bi bi-file-earmark-bar-graph"></i> Report Results</h1>
+            <p>{{ date_from }} to {{ date_to }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-primary">
+                <i class="bi bi-printer me-2"></i>Print
+            </button>
+            <a href="{% url 'reports' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-left me-2"></i>Back
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Report Header -->
+<div class="report-header">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h3><i class="bi bi-building me-2"></i>Smart Attendance System</h3>
+            <p class="mb-0">Attendance Report: {{ date_from }} - {{ date_to }}</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="fs-2 fw-bold">{{ total_records }}</div>
+            <div>Total Records</div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary -->
+{% if summary %}
+<div class="table-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Summary by Student</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Roll Number</th>
+                    <th>Days Present</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in summary %}
+                <tr>
+                    <td><strong>{{ item.student__name }}</strong></td>
+                    <td>{{ item.student__roll_number }}</td>
+                    <td><span class="badge bg-success">{{ item.total_days }} days</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Detailed Records -->
+<div class="table-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Detailed Records</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Student</th>
+                    <th>Roll Number</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ record.student.name|default:"Unknown" }}</td>
+                    <td>{{ record.student.roll_number|default:"-" }}</td>
+                    <td>{{ record.timestamp|date:"Y-m-d" }}</td>
+                    <td>{{ record.timestamp|time:"H:i:s" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">No records found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

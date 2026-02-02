@@ -1,11 +1,36 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Student, Attendance, SystemLog
+from .models import Student, Attendance, SystemLog, Department
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ['name', 'status_badge', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    list_per_page = 20
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Department Information', {
+            'fields': ('name', 'description')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at')
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+    
+    def status_badge(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: green;">● Active</span>')
+        return format_html('<span style="color: red;">● Inactive</span>')
+    status_badge.short_description = 'Status'
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = ['name', 'roll_number', 'department', 'user_type', 'status_badge', 'registered_at']
-    list_filter = ['user_type', 'department', 'is_active', 'registered_at']
+    list_filter = ['user_type', 'department', 'is_active', 'registered_at']  #department__is_active
     search_fields = ['name', 'roll_number', 'email', 'phone']
     list_per_page = 20
     date_hierarchy = 'registered_at'

@@ -3,6 +3,24 @@ from django.utils import timezone
 from django.contrib.auth.models import User  
 import json
 
+
+class Department(models.Model):
+    """Model for departments"""
+    
+    name = models.CharField(max_length=100, unique=True, verbose_name="Department Name")
+    description = models.TextField(blank=True, null=True, verbose_name="Description")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Created Date")
+    is_active = models.BooleanField(default=True, verbose_name="Active Status")
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Department'
+        verbose_name_plural = 'Departments'
+    
+    def __str__(self):
+        return self.name
+
+
 class Student(models.Model):
     """Model for registered students/staff"""
     
@@ -25,7 +43,14 @@ class Student(models.Model):
     roll_number = models.CharField(max_length=50, unique=True, verbose_name="Roll Number/ID")
     email = models.EmailField(blank=True, null=True, verbose_name="Email Address")
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")
-    department = models.CharField(max_length=50, blank=True, null=True, verbose_name="Department")
+    department = models.ForeignKey(
+        Department, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name="Department",
+        related_name='students'
+    )
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='student', verbose_name="User Type")
     
     # Face recognition data

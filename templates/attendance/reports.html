@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        background: white;
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    }
+    
+    .report-card h4 {
+        color: #1a1a2e;
+        font-weight: 700;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .report-card h4 i {
+        color: #4361ee;
+        margin-right: 10px;
+    }
+    
+    .report-type-selector {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    
+    .report-type-btn {
+        flex: 1;
+        padding: 20px;
+        border: 2px solid #e9ecef;
+        border-radius: 15px;
+        background: white;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .report-type-btn:hover,
+    .report-type-btn.active {
+        border-color: #4361ee;
+        background: rgba(67, 97, 238, 0.05);
+    }
+    
+    .report-type-btn.active {
+        box-shadow: 0 5px 20px rgba(67, 97, 238, 0.2);
+    }
+    
+    .report-type-btn i {
+        font-size: 2rem;
+        color: #4361ee;
+        margin-bottom: 10px;
+    }
+    
+    .report-type-btn h6 {
+        margin-bottom: 5px;
+        color: #1a1a2e;
+    }
+    
+    .report-type-btn p {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0;
+    }
+    
+    .form-section {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 20px;
+    }
+    
+    .form-section h6 {
+        color: #1a1a2e;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-file-earmark-bar-graph-fill"></i> Generate Reports</h1>
+    <p>Create and download attendance reports</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="report-card">
+            <h4><i class="bi bi-sliders"></i>Report Settings</h4>
+            
+            <form method="POST" action="{% url 'generate_report' %}">
+                {% csrf_token %}
+                
+                <!-- Report Type -->
+                <div class="form-section">
+                    <h6><i class="bi bi-collection me-2"></i>Select Report Type</h6>
+                    <div class="report-type-selector">
+                        <label class="report-type-btn active">
+                            <input type="radio" name="report_type" value="daily" checked class="d-none">
+                            <i class="bi bi-calendar-day d-block"></i>
+                            <h6>Daily Report</h6>
+                            <p>Day-by-day attendance</p>
+                        </label>
+                        <label class="report-type-btn">
+                            <input type="radio" name="report_type" value="summary" class="d-none">
+                            <i class="bi bi-bar-chart d-block"></i>
+                            <h6>Summary Report</h6>
+                            <p>Overall statistics</p>
+                        </label>
+                        <label class="report-type-btn">
+                            <input type="radio" name="report_type" value="student" class="d-none">
+                            <i class="bi bi-person d-block"></i>
+                            <h6>Student Report</h6>
+                            <p>Individual student</p>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Date Range -->
+                <div class="form-section">
+                    <h6><i class="bi bi-calendar-range me-2"></i>Date Range</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">From Date</label>
+                            <input type="date" name="date_from" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">To Date</label>
+                            <input type="date" name="date_to" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Student Filter -->
+                <div class="form-section">
+                    <h6><i class="bi bi-person-check me-2"></i>Student (Optional)</h6>
+                    <select name="student" class="form-select">
+                        <option value="">All Students</option>
+                        {% for student in students %}
+                        <option value="{{ student.pk }}">{{ student.name }} ({{ student.roll_number }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Export Format -->
+                <div class="form-section">
+                    <h6><i class="bi bi-file-earmark me-2"></i>Export Format</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="report-type-btn active w-100">
+                                <input type="radio" name="format" value="html" checked class="d-none">
+                                <i class="bi bi-globe d-block"></i>
+                                <h6>View Online</h6>
+                                <p>Preview in browser</p>
+                            </label>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="report-type-btn w-100">
+                                <input type="radio" name="format" value="excel" class="d-none">
+                                <i class="bi bi-file-earmark-excel d-block text-success"></i>
+                                <h6>Excel Download</h6>
+                                <p>Download .xlsx file</p>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit -->
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-download me-2"></i>Generate Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle active class on report type buttons
+    document.querySelectorAll('.report-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Find parent section
+            const section = this.closest('.form-section, .report-type-selector');
+            if (section) {
+                section.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('active'));
+            }
+            this.classList.add('active');
+        });
+    });
+    
+    // Set default dates
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    document.querySelector('input[name="date_from"]').valueAsDate = firstDay;
+    document.querySelector('input[name="date_to"]').valueAsDate = today;
+</script>
+{% endblock %}

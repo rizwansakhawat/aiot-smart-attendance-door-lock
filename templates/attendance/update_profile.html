@@ -1,0 +1,605 @@
+{% extends 'base.html' %}
+
+{% block title %}Update Profile - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .update-profile-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+    
+    .form-card-header {
+        background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
+        padding: 25px 30px;
+        color: white;
+    }
+    
+    .form-card-header h4 {
+        margin: 0;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .form-card-header p {
+        margin: 8px 0 0;
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+    
+    .form-card-body {
+        padding: 30px;
+    }
+    
+    .section-divider {
+        border: none;
+        border-top: 2px solid #f0f0f0;
+        margin: 30px 0;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title i {
+        color: #4361ee;
+    }
+    
+    /* Form Controls */
+    .form-label {
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+    }
+    
+    .form-label .text-muted {
+        font-weight: 400;
+        font-size: 0.85rem;
+    }
+    
+    .form-control {
+        border-radius: 10px;
+        padding: 12px 16px;
+        border: 2px solid #e9ecef;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .form-control:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.15);
+    }
+    
+    .form-control:disabled, .form-control[readonly] {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    .form-text {
+        color: #6c757d;
+        font-size: 0.85rem;
+        margin-top: 6px;
+    }
+    
+    /* Photo Upload */
+    .photo-upload-section {
+        display: flex;
+        align-items: center;
+        gap: 25px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .current-photo {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        font-weight: 700;
+        flex-shrink: 0;
+        border: 4px solid white;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .current-photo img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    
+    .photo-upload-info {
+        flex-grow: 1;
+    }
+    
+    .photo-upload-info h6 {
+        margin: 0 0 5px;
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    
+    .photo-upload-info p {
+        margin: 0;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+    
+    .photo-upload-btn {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .photo-upload-btn input[type="file"] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+    }
+    
+    /* Password Section */
+    .password-section {
+        background: #fff8e6;
+        border-radius: 15px;
+        padding: 25px;
+        border: 1px solid #ffe0b2;
+    }
+    
+    .password-section .section-title {
+        color: #ff9f1c;
+    }
+    
+    .password-section .section-title i {
+        color: #ff9f1c;
+    }
+    
+    .password-hint {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 15px;
+        border: 1px solid #ffe0b2;
+    }
+    
+    .password-hint h6 {
+        font-size: 0.85rem;
+        color: #ff9f1c;
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+    
+    .password-hint ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+    
+    .password-hint li {
+        margin-bottom: 3px;
+    }
+    
+    /* Buttons */
+    .btn-primary-gradient {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        border: none;
+        padding: 14px 30px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .btn-primary-gradient:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(67, 97, 238, 0.4);
+        color: white;
+    }
+    
+    .btn-secondary-outline {
+        background: white;
+        color: #6c757d;
+        border: 2px solid #e9ecef;
+        padding: 12px 25px;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    
+    .btn-secondary-outline:hover {
+        background: #f8f9fa;
+        color: #1a1a2e;
+    }
+    
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 20px;
+        border-top: 2px solid #f0f0f0;
+        margin-top: 30px;
+    }
+    
+    /* Input Group */
+    .input-group-text {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-right: none;
+        border-radius: 10px 0 0 10px;
+        color: #6c757d;
+    }
+    
+    .input-group .form-control {
+        border-radius: 0 10px 10px 0;
+    }
+    
+    /* Toggle Password */
+    .password-toggle {
+        position: relative;
+    }
+    
+    .password-toggle .toggle-btn {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 0;
+    }
+    
+    .password-toggle .toggle-btn:hover {
+        color: #4361ee;
+    }
+    
+    .password-toggle .form-control {
+        padding-right: 45px;
+    }
+    
+    /* Alert Styles */
+    .alert-info-custom {
+        background: #e8f4fd;
+        border: 1px solid #b8daff;
+        color: #004085;
+        border-radius: 10px;
+        padding: 15px 20px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .photo-upload-section {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .form-actions {
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .form-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="update-profile-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="bi bi-pencil-square"></i> Update Profile</h1>
+        <p>Edit your personal information and account settings</p>
+    </div>
+    
+    <form method="POST" enctype="multipart/form-data" id="update-profile-form">
+        {% csrf_token %}
+        
+        <!-- Basic Information -->
+        <div class="form-card">
+            <div class="form-card-header">
+                <h4><i class="bi bi-person-circle"></i> Personal Information</h4>
+                <p>Update your basic profile details</p>
+            </div>
+            
+            <div class="form-card-body">
+                <!-- Photo Upload -->
+                <div class="photo-upload-section">
+                    <div class="current-photo" id="photo-preview">
+                        {% if student and student.photo %}
+                            <img src="{{ student.photo.url }}" alt="Profile Photo" id="preview-img">
+                        {% else %}
+                            <span id="preview-initials">{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="photo-upload-info">
+                        <h6>Profile Photo</h6>
+                        <p>Upload a new photo (JPG, PNG, max 5MB)</p>
+                        {% if student and student.photo %}
+                        <small class="text-muted d-block mt-1">Current: {{ student.photo.name|cut:"faces/" }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="btn btn-outline-primary photo-upload-btn">
+                            <i class="bi bi-camera me-2"></i>Change Photo
+                            <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp" id="photo-input">
+                        </label>
+                        {% if student and student.photo %}
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="remove-photo-btn">
+                            <i class="bi bi-trash me-1"></i>Remove Photo
+                        </button>
+                        <input type="hidden" name="remove_photo" id="remove-photo-input" value="false">
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">First Name</label>
+                        <input type="text" class="form-control" name="first_name" 
+                               value="{{ user.first_name }}" placeholder="Enter first name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" class="form-control" name="last_name" 
+                               value="{{ user.last_name }}" placeholder="Enter last name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Email Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control" name="email" 
+                                   value="{{ user.email }}" placeholder="Enter email address">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Phone Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                            <input type="tel" class="form-control" name="phone" 
+                                   value="{{ student.phone|default:'' }}" placeholder="Enter phone number">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Username <span class="text-muted">(cannot be changed)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" value="{{ user.username }}" disabled readonly>
+                        </div>
+                    </div>
+                    
+                    {% if student %}
+                    <div class="col-md-6">
+                        <label class="form-label">Roll Number / ID <span class="text-muted">(cannot be changed)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-hash"></i></span>
+                            <input type="text" class="form-control" value="{{ student.roll_number }}" disabled readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Department <span class="text-muted">(contact admin to change)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-building"></i></span>
+                            <input type="text" class="form-control" 
+                                   value="{{ student.department.name|default:'Not assigned' }}" disabled readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">User Type <span class="text-muted">(contact admin to change)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                            <input type="text" class="form-control" 
+                                   value="{{ student.get_user_type_display }}" disabled readonly>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Change Password -->
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="password-section">
+                    <h5 class="section-title">
+                        <i class="bi bi-shield-lock"></i> Change Password
+                    </h5>
+                    <p class="text-muted mb-3">Leave blank if you don't want to change your password</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Current Password</label>
+                            <div class="password-toggle">
+                                <input type="password" class="form-control" name="current_password" 
+                                       id="current-password" placeholder="Enter current password">
+                                <button type="button" class="toggle-btn" onclick="togglePassword('current-password')">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">New Password</label>
+                            <div class="password-toggle">
+                                <input type="password" class="form-control" name="new_password" 
+                                       id="new-password" placeholder="Enter new password">
+                                <button type="button" class="toggle-btn" onclick="togglePassword('new-password')">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Confirm New Password</label>
+                            <div class="password-toggle">
+                                <input type="password" class="form-control" name="confirm_password" 
+                                       id="confirm-password" placeholder="Confirm new password">
+                                <button type="button" class="toggle-btn" onclick="togglePassword('confirm-password')">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="password-hint">
+                        <h6><i class="bi bi-info-circle me-1"></i> Password Requirements</h6>
+                        <ul>
+                            <li>At least 6 characters long</li>
+                            <li>Use a mix of letters, numbers, and symbols for security</li>
+                            <li>Don't use easily guessable information</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Form Actions -->
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="form-actions">
+                    <a href="{% url 'user_profile' %}" class="btn btn-secondary-outline">
+                        <i class="bi bi-arrow-left me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary-gradient">
+                        <i class="bi bi-check-lg me-2"></i>Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Photo preview
+    document.getElementById('photo-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('photo-preview');
+                const initials = document.getElementById('preview-initials');
+                let img = document.getElementById('preview-img');
+                
+                if (!img) {
+                    img = document.createElement('img');
+                    img.id = 'preview-img';
+                    img.alt = 'Profile Photo';
+                    preview.innerHTML = '';
+                    preview.appendChild(img);
+                }
+                
+                img.src = e.target.result;
+                
+                // Reset remove photo flag when new photo is selected
+                const removeInput = document.getElementById('remove-photo-input');
+                if (removeInput) {
+                    removeInput.value = 'false';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // Remove photo functionality
+    const removePhotoBtn = document.getElementById('remove-photo-btn');
+    if (removePhotoBtn) {
+        removePhotoBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to remove your profile photo?')) {
+                const preview = document.getElementById('photo-preview');
+                const firstName = '{{ user.first_name|slice:":1"|upper }}';
+                const lastName = '{{ user.last_name|slice:":1"|upper }}';
+                
+                // Show initials instead of image
+                preview.innerHTML = `<span id="preview-initials">${firstName}${lastName}</span>`;
+                
+                // Set the hidden input to mark photo for removal
+                document.getElementById('remove-photo-input').value = 'true';
+                
+                // Clear file input
+                document.getElementById('photo-input').value = '';
+                
+                // Hide the remove button
+                this.style.display = 'none';
+            }
+        });
+    }
+    
+    // Toggle password visibility
+    function togglePassword(inputId) {
+        const input = document.getElementById(inputId);
+        const btn = input.nextElementSibling;
+        const icon = btn.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    }
+    
+    // Form validation
+    document.getElementById('update-profile-form').addEventListener('submit', function(e) {
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const currentPassword = document.getElementById('current-password').value;
+        
+        if (newPassword && !currentPassword) {
+            e.preventDefault();
+            alert('Please enter your current password to change it.');
+            return;
+        }
+        
+        if (newPassword && newPassword !== confirmPassword) {
+            e.preventDefault();
+            alert('New passwords do not match.');
+            return;
+        }
+        
+        if (newPassword && newPassword.length < 6) {
+            e.preventDefault();
+            alert('New password must be at least 6 characters long.');
+            return;
+        }
+    });
+</script>
+{% endblock %}

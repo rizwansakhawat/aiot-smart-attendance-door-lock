@@ -21,7 +21,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import Student, Attendance, SystemLog
+from .models import Student, Attendance, SystemLog, Department
 from .services.face_recognition_service import (
     get_face_recognition_service,
 )
@@ -268,18 +268,12 @@ def register_student(request):
     if request.method == 'POST':
         return handle_student_registration(request)
     
+    # Fetch active departments from database
+    departments = Department.objects.filter(is_active=True).values_list('name', flat=True).order_by('name')
+    
     context = {
         'camera_index': CAMERA_INDEX,
-        'departments': [
-            'Computer Science',
-            'Electrical Engineering',
-            'Mechanical Engineering',
-            'Civil Engineering',
-            'Electronics',
-            'Software Engineering',
-            'Information Technology',
-            'Other'
-        ],
+        'departments': list(departments),
         'user_types': [
             ('student', 'Student'),
             ('staff', 'Staff'),
@@ -319,6 +313,9 @@ def handle_student_registration(request):
         if not face_encodings_json:
             errors.append("Face data is required. Please capture face images.")
         
+        if not department:
+            errors.append("Department is required")
+        
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -335,6 +332,7 @@ def handle_student_registration(request):
             # Get custom or generate username
             custom_username = request.POST.get('custom_username', '').strip()
             custom_password = request.POST.get('custom_password', '').strip()
+            department_obj = Department.objects.filter(name=department).first()
             
             if custom_username:
                 generated_username = custom_username.lower().replace(' ', '_')
@@ -367,6 +365,8 @@ def handle_student_registration(request):
            
             
             print(f"Created user: {generated_username} with password: {generated_password}")  # Debug log
+            
+        
         
         # Create student
         student = Student.objects.create(
@@ -375,7 +375,7 @@ def handle_student_registration(request):
             roll_number=roll_number,
             email=email if email else None,
             phone=phone if phone else None,
-            department=department if department else None,
+            department=department_obj if department_obj else None,
             user_type=user_type,
             face_encoding=face_encodings_json,
             is_active=True
@@ -396,7 +396,7 @@ def handle_student_registration(request):
             messages.success(
                 request, 
                 f'''
-                <div class="d-flex align-items-start">
+                <div id='success-message' class="d-flex align-items-start">
                     <div class="me-3">
                         <span style="font-size: 2.5rem;">✅</span>
                     </div>
@@ -477,6 +477,8 @@ def capture_face_api(request):
         
         # Detect face
         face_location = service.detect_single_face(image)
+        
+        print(f"Detected face location: {face_location}")  # Debug log
         
         if face_location is None:
             return JsonResponse({
@@ -581,10 +583,10 @@ def student_list(request):
         )
     
     if department:
-        students = students.filter(department=department)
+        students = students.filter(department__name__iexact=department)
     
     if user_type:
-        students = students.filter(user_type=user_type)
+        students = students.filter(user_type__iexact=user_type)
     
     if status:
         if status == 'active':
@@ -596,14 +598,14 @@ def student_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    departments = Student.objects.values_list('department', flat=True).distinct()
-    departments = [d for d in departments if d]
+    # Get unique active departments from database
+    departments = Department.objects.filter(is_active=True).values_list('name', flat=True).order_by('name')
     
     context = {
         'page_obj': page_obj,
         'students': page_obj,
         'total_students': students.count(),
-        'departments': departments,
+        'departments': list(departments),
         'search': search,
         'selected_department': department,
         'selected_user_type': user_type,

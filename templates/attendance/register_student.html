@@ -751,8 +751,10 @@
                     </div>
                     
                     <div class="col-md-6">
-                        <label class="form-label">Department</label>
-                        <select name="department" id="department" class="form-select">
+                        <label class="form-label">
+                            Department <span class="required">*</span>
+                        </label>
+                        <select name="department" id="department" class="form-select" required>
                             <option value="">Select Department</option>
                             {% for dept in departments %}
                             <option value="{{ dept }}">{{ dept }}</option>
@@ -1140,6 +1142,7 @@
         if (step === 2) {
             const name = document.getElementById('name').value.trim();
             const roll = document.getElementById('roll_number').value.trim();
+            const dept = document.getElementById('department').value;
             
             if (!name) {
                 showAlert('Please enter the student\'s full name', 'danger');
@@ -1150,6 +1153,12 @@
             if (!roll) {
                 showAlert('Please enter the roll number or ID', 'danger');
                 document.getElementById('roll_number').focus();
+                return;
+            }
+
+            if(!dept) {
+                showAlert('Please select a department', 'danger');
+                document.getElementById('department').focus();
                 return;
             }
             
@@ -1491,7 +1500,7 @@
             if (alertDiv.parentNode) {
                 alertDiv.remove();
             }
-        }, 8000);
+        }, 2000);
     }
     
     // ═══════════════════════════════════════════════════════════════

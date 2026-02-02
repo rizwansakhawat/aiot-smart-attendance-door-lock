@@ -974,6 +974,9 @@
                 <!-- Hidden field for face encodings -->
                 <input type="hidden" name="face_encodings" id="face_encodings">
                 
+                <!-- Hidden field for profile photo (base64) -->
+                <input type="hidden" name="profile_photo" id="profile_photo">
+                
                 <div class="nav-buttons">
                     <button type="button" class="btn btn-nav btn-nav-back" onclick="goToStep(2)">
                         <i class="bi bi-arrow-left me-2"></i>Back
@@ -1455,6 +1458,12 @@
         const faceEncodingsInput = document.getElementById('face_encodings');
         if (faceEncodingsInput) {
             faceEncodingsInput.value = JSON.stringify(capturedEncodings);
+        }
+        
+        // Save first captured image as profile photo
+        const profilePhotoInput = document.getElementById('profile_photo');
+        if (profilePhotoInput && capturedThumbnails.length > 0) {
+            profilePhotoInput.value = capturedThumbnails[0];  // First image as profile
         }
     }
     

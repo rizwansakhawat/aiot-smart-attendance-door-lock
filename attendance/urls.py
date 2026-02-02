@@ -6,6 +6,10 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     
+    # User Profile
+    path('profile/', views.user_profile, name='user_profile'),
+    path('profile/update/', views.update_profile, name='update_profile'),
+    
     # Dashboard (auto-routes to admin or user dashboard)
     path('', views.dashboard, name='dashboard'),
     

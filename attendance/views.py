@@ -8,7 +8,10 @@ import json
 import base64
 import cv2
 import numpy as np
+import os
+import uuid
 from datetime import datetime, timedelta
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -112,6 +115,170 @@ def logout_view(request):
         messages.success(request, 'You have been logged out successfully.')
     
     return redirect('login')
+
+
+# ═══════════════════════════════════════════════════════════════════
+# USER PROFILE VIEWS
+# ═══════════════════════════════════════════════════════════════════
+
+@login_required(login_url='login')
+def user_profile(request):
+    """
+    View user profile - Shows profile information
+    """
+    user = request.user
+    student = get_student_for_user(user)
+    
+    # Get attendance statistics
+    attendance_stats = {}
+    if student:
+        today = timezone.now().date()
+        all_attendance = Attendance.objects.filter(
+            student=student,
+            entry_type='success'
+        )
+        
+        # Total attendance days
+        attendance_stats['total_days'] = all_attendance.values('timestamp__date').distinct().count()
+        
+        # This month's attendance
+        first_of_month = today.replace(day=1)
+        attendance_stats['month_attendance'] = all_attendance.filter(
+            timestamp__date__gte=first_of_month
+        ).values('timestamp__date').distinct().count()
+        
+        # Last access
+        attendance_stats['last_access'] = all_attendance.first()
+    
+    context = {
+        'user': user,
+        'student': student,
+        'attendance_stats': attendance_stats,
+        'is_admin': is_admin(user),
+    }
+    
+    return render(request, 'attendance/profile.html', context)
+
+
+@login_required(login_url='login')
+def update_profile(request):
+    """
+    Update user profile - Allows users to update their information
+    """
+    user = request.user
+    student = get_student_for_user(user)
+    
+    if request.method == 'POST':
+        # Get form data
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        
+        # Password change (optional)
+        current_password = request.POST.get('current_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+        
+        errors = []
+        
+        # Validate email uniqueness (excluding current user)
+        if email and User.objects.filter(email=email).exclude(pk=user.pk).exists():
+            errors.append("This email is already in use by another account.")
+        
+        # Password validation
+        if new_password:
+            if not current_password:
+                errors.append("Please enter your current password to change it.")
+            elif not user.check_password(current_password):
+                errors.append("Current password is incorrect.")
+            elif new_password != confirm_password:
+                errors.append("New passwords do not match.")
+            elif len(new_password) < 6:
+                errors.append("New password must be at least 6 characters long.")
+        
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect('update_profile')
+        
+        # Update User model
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = email
+        
+        if new_password:
+            user.set_password(new_password)
+        
+        user.save()
+        
+        # Update Student model if exists
+        if student:
+            student.email = email if email else student.email
+            student.phone = phone if phone else student.phone
+            
+            # Update name in student if changed
+            full_name = f"{first_name} {last_name}".strip()
+            if full_name:
+                student.name = full_name
+            
+            # Handle profile photo update
+            if 'photo' in request.FILES:
+                photo = request.FILES['photo']
+                
+                # Validate file type
+                allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+                if photo.content_type not in allowed_types:
+                    messages.warning(request, 'Invalid image format. Please upload JPG, PNG, GIF, or WebP.')
+                elif photo.size > 5 * 1024 * 1024:  # 5MB limit
+                    messages.warning(request, 'Image too large. Maximum size is 5MB.')
+                else:
+                    # Delete old photo if exists
+                    if student.photo:
+                        try:
+                            import os
+                            if os.path.isfile(student.photo.path):
+                                os.remove(student.photo.path)
+                        except Exception:
+                            pass  # Ignore deletion errors
+                    
+                    # Save new photo
+                    student.photo = photo
+            
+            # Handle photo removal
+            if request.POST.get('remove_photo') == 'true' and student.photo:
+                try:
+                    import os
+                    if os.path.isfile(student.photo.path):
+                        os.remove(student.photo.path)
+                except Exception:
+                    pass
+                student.photo = None
+            
+            student.save()
+        
+        # Log profile update
+        SystemLog.objects.create(
+            log_type='info',
+            message=f"User '{user.username}' updated their profile"
+        )
+        
+        messages.success(request, 'Your profile has been updated successfully!')
+        
+        # Re-login if password was changed
+        if new_password:
+            login(request, user)
+            messages.info(request, 'Your password has been changed. You are still logged in.')
+        
+        return redirect('user_profile')
+    
+    context = {
+        'user': user,
+        'student': student,
+        'is_admin': is_admin(user),
+    }
+    
+    return render(request, 'attendance/update_profile.html', context)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -286,7 +453,7 @@ def register_student(request):
 def handle_student_registration(request):
     """
     Handle POST request for student registration
-    Also creates a User account for the student
+    Also creates a User account and saves profile photo
     """
     try:
         # Get form data
@@ -297,6 +464,7 @@ def handle_student_registration(request):
         department = request.POST.get('department', '').strip()
         user_type = request.POST.get('user_type', 'student')
         face_encodings_json = request.POST.get('face_encodings', '')
+        profile_photo_data = request.POST.get('profile_photo', '')  # Base64 image
         create_account = request.POST.get('create_account', 'on')  # Checkbox
         
         # Validation
@@ -321,18 +489,51 @@ def handle_student_registration(request):
                 messages.error(request, error)
             return redirect('register_student')
         
+        # ═══════════════════════════════════════════════════════════
+        # SAVE PROFILE PHOTO FROM BASE64
+        # ═══════════════════════════════════════════════════════════
+        saved_photo_path = None
+        
+        if profile_photo_data:
+            try:
+                # Remove data URL prefix
+                if 'base64,' in profile_photo_data:
+                    profile_photo_data = profile_photo_data.split('base64,')[1]
+                
+                # Decode base64
+                image_data = base64.b64decode(profile_photo_data)
+                
+                # Create filename
+                filename = f"{roll_number.replace(' ', '_').replace('-', '_')}_{uuid.uuid4().hex[:8]}.jpg"
+                
+                # Ensure directory exists
+                faces_dir = os.path.join(settings.MEDIA_ROOT, 'faces')
+                os.makedirs(faces_dir, exist_ok=True)
+                
+                # Save file
+                filepath = os.path.join(faces_dir, filename)
+                with open(filepath, 'wb') as f:
+                    f.write(image_data)
+                
+                saved_photo_path = f"faces/{filename}"
+                print(f"✅ Profile photo saved: {saved_photo_path}")
+                
+            except Exception as e:
+                print(f"⚠️ Error saving photo: {e}")
+                # Continue without photo - not critical
+        
+        # Get department object
+        department_obj = Department.objects.filter(name=department).first()
+        
         # Create User account if checkbox is checked
         user = None
         generated_username = None
         generated_password = None
-        
-        # In handle_student_registration function, replace the username/password generation:
 
         if create_account:
             # Get custom or generate username
             custom_username = request.POST.get('custom_username', '').strip()
             custom_password = request.POST.get('custom_password', '').strip()
-            department_obj = Department.objects.filter(name=department).first()
             
             if custom_username:
                 generated_username = custom_username.lower().replace(' ', '_')
@@ -362,11 +563,7 @@ def handle_student_registration(request):
                 last_name=' '.join(name.split()[1:]) if len(name.split()) > 1 else ''
             )
             
-           
-            
             print(f"Created user: {generated_username} with password: {generated_password}")  # Debug log
-            
-        
         
         # Create student
         student = Student.objects.create(
@@ -378,6 +575,7 @@ def handle_student_registration(request):
             department=department_obj if department_obj else None,
             user_type=user_type,
             face_encoding=face_encodings_json,
+            photo=saved_photo_path,  # Path to saved image
             is_active=True
         )
         
@@ -396,33 +594,70 @@ def handle_student_registration(request):
             messages.success(
                 request, 
                 f'''
-                <div id='success-message' class="d-flex align-items-start">
-                    <div class="me-3">
-                        <span style="font-size: 2.5rem;">✅</span>
-                    </div>
-                    <div>
-                        <h5 class="mb-2">Student "{name}" registered successfully!</h5>
-                        <div class="card bg-light border-0 mt-3" style="max-width: 350px;">
-                            <div class="card-body">
-                                <h6 class="card-title mb-3">
-                                    <i class="bi bi-key-fill text-primary me-2"></i>Login Credentials
-                                </h6>
-                                <div class="row mb-2">
-                                    <div class="col-4 text-muted">Username:</div>
-                                    <div class="col-8"><code class="bg-white px-2 py-1 rounded">{generated_username}</code></div>
+                <div id="success-message" class="p-3">
+                    <div class="d-flex align-items-start">
+                        <div class="me-3">
+                            <span style="font-size: 3rem;">🎉</span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h4 class="mb-3 text-success">
+                                <i class="bi bi-check-circle-fill me-2"></i>Student Registered Successfully!
+                            </h4>
+                            <p class="mb-3"><strong>{name}</strong> has been added to the system.</p>
+                            
+                            <div class="card border-primary" style="max-width: 400px;">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="bi bi-key-fill me-2"></i>Login Credentials
                                 </div>
-                                <div class="row mb-2">
-                                    <div class="col-4 text-muted">Password:</div>
-                                    <div class="col-8"><code class="bg-white px-2 py-1 rounded">{generated_password}</code></div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted small mb-1">Username</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control bg-light" value="{generated_username}" id="copy-username" readonly>
+                                            <button class="btn btn-outline-primary" type="button" onclick="copyToClipboard('copy-username')">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted small mb-1">Password</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control bg-light" value="{generated_password}" id="copy-password" readonly>
+                                            <button class="btn btn-outline-primary" type="button" onclick="copyToClipboard('copy-password')">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-warning mb-0 py-2">
+                                        <small>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                            Please save these credentials! This message will disappear.
+                                        </small>
+                                    </div>
                                 </div>
-                                <small class="text-danger">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                    Please save these credentials securely!
-                                </small>
                             </div>
                         </div>
                     </div>
                 </div>
+                <script>
+                function copyToClipboard(elementId) {{
+                    const input = document.getElementById(elementId);
+                    input.select();
+                    document.execCommand('copy');
+                    
+                    const btn = input.nextElementSibling;
+                    const originalHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="bi bi-check"></i>';
+                    btn.classList.remove('btn-outline-primary');
+                    btn.classList.add('btn-success');
+                    
+                    setTimeout(() => {{
+                        btn.innerHTML = originalHtml;
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-outline-primary');
+                    }}, 2000);
+                }}
+                </script>
                 '''
             )
         else:
@@ -664,7 +899,11 @@ def delete_student(request, pk):
     """
     Delete a student - Admin only
     """
-    student = get_object_or_404(Student, pk=pk)
+    try:
+        student = Student.objects.get(pk=pk)
+    except Student.DoesNotExist:
+        messages.error(request, f"Student with ID {pk} does not exist or has already been deleted.")
+        return redirect('student_list')
     
     if request.method == 'POST':
         name = student.name

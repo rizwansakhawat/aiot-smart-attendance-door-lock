@@ -325,13 +325,256 @@
             margin-bottom: 8px;
         }
         
+        /* Mobile Header */
+        .mobile-header {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            z-index: 999;
+            padding: 0 15px;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .mobile-header .brand {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .mobile-header .brand i {
+            color: var(--success-color);
+            font-size: 1.4rem;
+        }
+        
+        .hamburger-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .hamburger-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Sidebar Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            backdrop-filter: blur(3px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        
         /* Responsive */
         @media (max-width: 992px) {
+            .mobile-header {
+                display: flex;
+            }
+            
             .sidebar {
                 transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                z-index: 1000;
             }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
             .main-content {
                 margin-left: 0;
+                padding-top: 80px;
+            }
+            
+            .sidebar-menu {
+                padding-bottom: 200px;
+            }
+            
+            /* Fixed bottom user section for mobile */
+            .sidebar .user-section-fixed {
+                width: 280px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 80px 15px 20px 15px;
+            }
+            
+            .page-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .stat-card {
+                padding: 20px;
+                margin-bottom: 15px;
+            }
+            
+            .stat-card .number {
+                font-size: 1.6rem;
+            }
+            
+            .stat-card .icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+            
+            .table-card .card-header {
+                padding: 15px;
+            }
+            
+            .table th, .table td {
+                padding: 12px 10px;
+                font-size: 0.85rem;
+            }
+            
+            /* Responsive table */
+            .table-responsive {
+                border-radius: 0 0 15px 15px;
+            }
+            
+            .btn {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
+            
+            .alert {
+                font-size: 0.9rem;
+                padding: 12px 15px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .mobile-header {
+                height: 55px;
+                padding: 0 12px;
+            }
+            
+            .mobile-header .brand {
+                font-size: 1rem;
+            }
+            
+            .mobile-header .brand i {
+                font-size: 1.2rem;
+            }
+            
+            .hamburger-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+            
+            .main-content {
+                padding: 70px 12px 15px 12px;
+            }
+            
+            .page-header {
+                margin-bottom: 20px;
+            }
+            
+            .page-header h1 {
+                font-size: 1.3rem;
+            }
+            
+            .page-header p {
+                font-size: 0.85rem;
+            }
+            
+            .stat-card {
+                padding: 15px;
+                border-radius: 12px;
+            }
+            
+            .stat-card .number {
+                font-size: 1.4rem;
+            }
+            
+            .stat-card .label {
+                font-size: 0.8rem;
+            }
+            
+            .stat-card .icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.1rem;
+                border-radius: 10px;
+            }
+            
+            .table-card {
+                border-radius: 12px;
+            }
+            
+            .table th, .table td {
+                padding: 10px 8px;
+                font-size: 0.8rem;
+            }
+            
+            .form-control, .form-select {
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }
+            
+            .form-label {
+                font-size: 0.9rem;
+            }
+            
+            /* Hide some table columns on very small screens */
+            .hide-mobile {
+                display: none !important;
+            }
+            
+            /* Stack buttons on mobile */
+            .btn-group-mobile {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .btn-group-mobile .btn {
+                width: 100%;
+            }
+        }
+        
+        /* Utility classes for responsive visibility */
+        @media (min-width: 993px) {
+            .show-mobile-only {
+                display: none !important;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .hide-mobile {
+                display: none !important;
             }
         }
     </style>
@@ -339,8 +582,21 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+        <div class="brand">
+            <i class="bi bi-shield-check"></i> Smart Attendance
+        </div>
+        <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
+            <i class="bi bi-list" id="hamburger-icon"></i>
+        </button>
+    </header>
+    
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+    
     <!-- Sidebar -->
-    <nav class="sidebar">
+    <nav class="sidebar" id="sidebar">
         <div class="sidebar-brand">
             <i class="bi bi-shield-check"></i> Smart Attendance
         </div>
@@ -398,11 +654,19 @@
                 </a>
             </li>
             {% endif %}
+            
+            <li class="menu-header">Account</li>
+            
+            <li>
+                <a href="{% url 'user_profile' %}" class="{% if request.resolver_match.url_name == 'user_profile' or request.resolver_match.url_name == 'update_profile' %}active{% endif %}">
+                    <i class="bi bi-person-circle"></i> My Profile
+                </a>
+            </li>
         </ul>
         
         {% if user.is_authenticated %}
         <div style="position: fixed; bottom: 0; left: 0; width: 280px; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%); backdrop-filter: blur(10px); z-index: 1001;">
-            <div class="d-flex align-items-center mb-3">
+            <a href="{% url 'user_profile' %}" class="d-flex align-items-center mb-3 text-decoration-none" style="transition: all 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                 <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #4361ee, #3f37c9); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.2rem; margin-right: 12px; box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3); border: 2px solid rgba(255,255,255,0.2);">
                     {{ user.username|slice:":1"|upper }}
                 </div>
@@ -415,7 +679,7 @@
                         {% if user.is_staff %}Admin{% else %}User{% endif %}
                     </small>
                 </div>
-            </div>
+            </a>
             <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm w-100" style="border-radius: 8px; padding: 10px; font-weight: 500; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.3);" onmouseover="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.5)';" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255,255,255,0.3)';">
                 <i class="bi bi-box-arrow-left me-2"></i>Logout
             </a>
@@ -441,6 +705,57 @@
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Mobile Navigation Script -->
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        const hamburgerIcon = document.getElementById('hamburger-icon');
+        
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            
+            // Toggle hamburger icon
+            if (sidebar.classList.contains('active')) {
+                hamburgerIcon.classList.remove('bi-list');
+                hamburgerIcon.classList.add('bi-x-lg');
+            } else {
+                hamburgerIcon.classList.remove('bi-x-lg');
+                hamburgerIcon.classList.add('bi-list');
+            }
+        }
+        
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+            hamburgerIcon.classList.remove('bi-x-lg');
+            hamburgerIcon.classList.add('bi-list');
+        }
+        
+        // Close sidebar when clicking on a menu link (mobile)
+        document.querySelectorAll('.sidebar-menu a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 992) {
+                    closeSidebar();
+                }
+            });
+        });
+        
+        // Close sidebar on window resize if larger than 992px
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 992) {
+                closeSidebar();
+            }
+        });
+        
+        // Close sidebar with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+                closeSidebar();
+            }
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

@@ -478,23 +478,43 @@
 
 {% block extra_js %}
 <script>
-    // Auto-remove success message after 3 seconds
+    // Auto-remove success message after 15 seconds (longer time to copy credentials)
     document.addEventListener('DOMContentLoaded', function() {
         const successMessage = document.getElementById('success-message');
         if (successMessage) {
-            // Add fade out animation
+            // Scroll to the message to make it visible
+            successMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Add fade out animation after 15 seconds
             setTimeout(function() {
-                successMessage.style.transition = 'opacity 0.5s ease-out';
-                successMessage.style.opacity = '0';
-                
-                // Remove from DOM after fade out
+                const alertContainer = successMessage.closest('.alert');
+                if (alertContainer) {
+                    alertContainer.style.transition = 'opacity 0.5s ease-out';
+                    alertContainer.style.opacity = '0';
+                    
+                    // Remove from DOM after fade out
+                    setTimeout(function() {
+                        if (alertContainer.parentNode) {
+                            alertContainer.remove();
+                        }
+                    }, 500);
+                }
+            }, 15000); // Wait 15 seconds before fading (so user can copy credentials)
+        }
+        
+        // Auto-remove regular success alerts after 5 seconds
+        const regularAlerts = document.querySelectorAll('.alert-success:not(:has(#success-message))');
+        regularAlerts.forEach(function(alert) {
+            setTimeout(function() {
+                alert.style.transition = 'opacity 0.5s ease-out';
+                alert.style.opacity = '0';
                 setTimeout(function() {
-                    if (successMessage.parentNode) {
-                        successMessage.parentNode.remove();
+                    if (alert.parentNode) {
+                        alert.remove();
                     }
                 }, 500);
-            }, 3000); // Wait 3 seconds before fading
-        }
+            }, 5000);
+        });
     });
 </script>
 {% endblock %}

@@ -1,0 +1,526 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile - Smart Attendance System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    
+    .profile-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+    
+    .profile-header {
+        background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
+        padding: 50px 40px;
+        text-align: center;
+        color: white;
+        position: relative;
+    }
+    
+    .profile-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    
+    .profile-avatar {
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        background: white;
+        color: #4361ee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3.5rem;
+        font-weight: 700;
+        margin: 0 auto 25px;
+        border: 5px solid rgba(255,255,255,0.3);
+        position: relative;
+        z-index: 1;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .profile-avatar img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    
+    .profile-name {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .profile-role {
+        opacity: 0.9;
+        font-size: 1.1rem;
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255,255,255,0.15);
+        padding: 8px 20px;
+        border-radius: 25px;
+    }
+    
+    .profile-role i {
+        font-size: 1rem;
+    }
+    
+    .edit-profile-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-decoration: none;
+        z-index: 2;
+    }
+    
+    .edit-profile-btn:hover {
+        background: rgba(255,255,255,0.3);
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .profile-body {
+        padding: 35px;
+    }
+    
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title i {
+        color: #4361ee;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+    
+    .info-item {
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        transition: all 0.3s;
+    }
+    
+    .info-item:hover {
+        background: #f0f4ff;
+        transform: translateY(-2px);
+    }
+    
+    .info-item .label {
+        color: #6c757d;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .info-item .label i {
+        color: #4361ee;
+        font-size: 1rem;
+    }
+    
+    .info-item .value {
+        color: #1a1a2e;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    
+    .info-item .value.not-set {
+        color: #adb5bd;
+        font-style: italic;
+        font-weight: 400;
+    }
+    
+    /* Stats Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        text-align: center;
+        transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card .icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin: 0 auto 15px;
+    }
+    
+    .stat-card.primary .icon {
+        background: rgba(67, 97, 238, 0.15);
+        color: #4361ee;
+    }
+    
+    .stat-card.success .icon {
+        background: rgba(46, 196, 182, 0.15);
+        color: #2ec4b6;
+    }
+    
+    .stat-card.warning .icon {
+        background: rgba(255, 159, 28, 0.15);
+        color: #ff9f1c;
+    }
+    
+    .stat-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 5px;
+    }
+    
+    .stat-card .label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    
+    /* Status Badge */
+    .status-badge {
+        padding: 8px 20px;
+        border-radius: 25px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .status-badge.active {
+        background: rgba(46, 196, 182, 0.15);
+        color: #2ec4b6;
+    }
+    
+    .status-badge.inactive {
+        background: rgba(231, 29, 54, 0.15);
+        color: #e71d36;
+    }
+    
+    .status-badge.admin {
+        background: rgba(67, 97, 238, 0.15);
+        color: #4361ee;
+    }
+    
+    /* Quick Actions */
+    .quick-actions {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .quick-action-btn {
+        padding: 12px 25px;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .quick-action-btn.primary {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        color: white;
+        border: none;
+    }
+    
+    .quick-action-btn.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(67, 97, 238, 0.4);
+        color: white;
+    }
+    
+    .quick-action-btn.outline {
+        background: white;
+        color: #4361ee;
+        border: 2px solid #4361ee;
+    }
+    
+    .quick-action-btn.outline:hover {
+        background: #4361ee;
+        color: white;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .edit-profile-btn {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-top: 20px;
+            display: inline-block;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="bi bi-person-circle"></i> My Profile</h1>
+        <p>View and manage your account information</p>
+    </div>
+    
+    {% if student %}
+    <!-- Attendance Stats -->
+    <div class="stats-grid">
+        <div class="stat-card primary">
+            <div class="icon">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+            <div class="value">{{ attendance_stats.total_days|default:0 }}</div>
+            <div class="label">Total Attendance Days</div>
+        </div>
+        
+        <div class="stat-card success">
+            <div class="icon">
+                <i class="bi bi-calendar-month"></i>
+            </div>
+            <div class="value">{{ attendance_stats.month_attendance|default:0 }}</div>
+            <div class="label">This Month</div>
+        </div>
+        
+        <div class="stat-card warning">
+            <div class="icon">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="value">
+                {% if attendance_stats.last_access %}
+                    {{ attendance_stats.last_access.timestamp|date:"M d" }}
+                {% else %}
+                    --
+                {% endif %}
+            </div>
+            <div class="label">Last Access</div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Profile Card -->
+    <div class="profile-card">
+        <div class="profile-header">
+            <a href="{% url 'update_profile' %}" class="edit-profile-btn">
+                <i class="bi bi-pencil-square me-2"></i>Edit Profile
+            </a>
+            
+            <div class="profile-avatar">
+                {% if student and student.photo %}
+                    <img src="{{ student.photo.url }}" alt="{{ user.get_full_name }}">
+                {% else %}
+                    {{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}
+                {% endif %}
+            </div>
+            
+            <h1 class="profile-name">{{ user.get_full_name|default:user.username }}</h1>
+            
+            <div class="profile-role">
+                {% if is_admin %}
+                    <i class="bi bi-shield-check"></i> Administrator
+                {% elif student %}
+                    <i class="bi bi-person"></i> {{ student.get_user_type_display }}
+                {% else %}
+                    <i class="bi bi-person"></i> User
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="profile-body">
+            <!-- Account Information -->
+            <h5 class="section-title">
+                <i class="bi bi-person-badge"></i> Account Information
+            </h5>
+            
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-person"></i> Username
+                    </div>
+                    <div class="value">{{ user.username }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-envelope"></i> Email Address
+                    </div>
+                    <div class="value {% if not user.email %}not-set{% endif %}">
+                        {{ user.email|default:"Not set" }}
+                    </div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-calendar-plus"></i> Account Created
+                    </div>
+                    <div class="value">{{ user.date_joined|date:"F d, Y" }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-clock"></i> Last Login
+                    </div>
+                    <div class="value">
+                        {% if user.last_login %}
+                            {{ user.last_login|date:"F d, Y - h:i A" }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if student %}
+            <!-- Student/Staff Information -->
+            <h5 class="section-title mt-4">
+                <i class="bi bi-card-list"></i> Profile Information
+            </h5>
+            
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-hash"></i> Roll Number / ID
+                    </div>
+                    <div class="value">{{ student.roll_number }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-building"></i> Department
+                    </div>
+                    <div class="value {% if not student.department %}not-set{% endif %}">
+                        {{ student.department.name|default:"Not assigned" }}
+                    </div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-telephone"></i> Phone Number
+                    </div>
+                    <div class="value {% if not student.phone %}not-set{% endif %}">
+                        {{ student.phone|default:"Not set" }}
+                    </div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-person-badge"></i> User Type
+                    </div>
+                    <div class="value">{{ student.get_user_type_display }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-calendar-check"></i> Registered On
+                    </div>
+                    <div class="value">{{ student.registered_at|date:"F d, Y" }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="label">
+                        <i class="bi bi-toggle-on"></i> Account Status
+                    </div>
+                    <div class="value">
+                        {% if student.is_active %}
+                            <span class="status-badge active">
+                                <i class="bi bi-check-circle-fill"></i> Active
+                            </span>
+                        {% else %}
+                            <span class="status-badge inactive">
+                                <i class="bi bi-x-circle-fill"></i> Inactive
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Quick Actions -->
+            <h5 class="section-title mt-4">
+                <i class="bi bi-lightning"></i> Quick Actions
+            </h5>
+            
+            <div class="quick-actions">
+                <a href="{% url 'update_profile' %}" class="quick-action-btn primary">
+                    <i class="bi bi-pencil-square"></i> Edit Profile
+                </a>
+                <a href="{% url 'dashboard' %}" class="quick-action-btn outline">
+                    <i class="bi bi-speedometer2"></i> Go to Dashboard
+                </a>
+                {% if student %}
+                <a href="{% url 'attendance_list' %}" class="quick-action-btn outline">
+                    <i class="bi bi-calendar3"></i> View Attendance
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

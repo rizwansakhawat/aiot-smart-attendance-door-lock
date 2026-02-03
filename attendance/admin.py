@@ -43,15 +43,24 @@ class StudentAdmin(admin.ModelAdmin):
             'fields': ('department', 'user_type')
         }),
         ('Face Recognition Data', {
-            'fields': ('face_encoding', 'photo'),
+            'fields': ('face_encoding',),
             'classes': ('collapse',)
+        }),
+        ('Photo', {
+            'fields': ('photo', 'photo_preview'),
         }),
         ('Status', {
             'fields': ('is_active', 'registered_at')
         }),
     )
     
-    readonly_fields = ['registered_at']
+    readonly_fields = ['registered_at', 'photo_preview']
+    
+    def photo_preview(self, obj):
+        if obj.photo:
+            return format_html('<img src="{}" style="max-width: 200px; max-height: 200px; border-radius: 5px;" />', obj.photo.url)
+        return "No photo uploaded"
+    photo_preview.short_description = 'Photo Preview'
     
     def status_badge(self, obj):
         if obj.is_active:

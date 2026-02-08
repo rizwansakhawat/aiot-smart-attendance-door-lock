@@ -40,13 +40,25 @@ try:
 except:
     DJANGO_SETTINGS_AVAILABLE = False
 
-# Import models (will be used when called from Django)
-try:
-    from attendance.models import Student, Attendance, SystemLog
-    DJANGO_AVAILABLE = True
-except:
-    DJANGO_AVAILABLE = False
-    print("⚠️ Running in standalone mode (Django not available)")
+# Models will be imported lazily to avoid circular import issues
+DJANGO_AVAILABLE = None  # Will be set on first check
+
+def _get_models():
+    """Lazy import of Django models to avoid circular imports"""
+    global DJANGO_AVAILABLE
+    if DJANGO_AVAILABLE is None:
+        try:
+            from attendance.models import Student, Attendance, SystemLog
+            DJANGO_AVAILABLE = True
+            return Student, Attendance, SystemLog
+        except Exception:
+            DJANGO_AVAILABLE = False
+            print("⚠️ Running in standalone mode (Django not available)")
+            return None, None, None
+    elif DJANGO_AVAILABLE:
+        from attendance.models import Student, Attendance, SystemLog
+        return Student, Attendance, SystemLog
+    return None, None, None
 
 
 def get_camera_index() -> int:
@@ -335,6 +347,7 @@ class FaceRecognitionService:
         - After new student registration
         - After student deletion
         """
+        Student, Attendance, SystemLog = _get_models()
         if not DJANGO_AVAILABLE:
             print("⚠️ Django not available, cannot load from database")
             return 0

@@ -42,3 +42,7 @@ db.sqlite3
 
 media/
 test_django_camera.py
+
+.env
+/.env
+

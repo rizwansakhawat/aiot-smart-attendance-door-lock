@@ -37,6 +37,14 @@ try:
 except ImportError:
     SERIAL_AVAILABLE = False
     print("❌ PySerial not installed! Run: pip install pyserial")
+    
+# Notification Service
+try:
+    from attendance.services.notification_service import NotificationService
+    NOTIFICATIONS_AVAILABLE = True
+except ImportError:
+    NOTIFICATIONS_AVAILABLE = False
+    print("⚠️ Notification service not available")
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -84,7 +92,7 @@ def log_system(log_type, message):
 
 
 def save_attendance(student, entry_type='success'):
-    """Save attendance record"""
+    """Save attendance record and send notifications"""
     try:
         today = timezone.now().date()
         existing = Attendance.objects.filter(
@@ -97,16 +105,52 @@ def save_attendance(student, entry_type='success'):
             print(f"   ℹ️ {student.name} already marked today")
             return False
         
-        Attendance.objects.create(
+        # Save attendance
+        attendance = Attendance.objects.create(
             student=student,
             entry_type=entry_type,
             location='Main Door'
         )
+        
         log_system('success', f"Attendance saved: {student.name}")
+        
+        # Send notifications
+        if NOTIFICATIONS_AVAILABLE:
+            try:
+                NotificationService.notify_attendance(student, attendance.timestamp)
+            except Exception as e:
+                print(f"   ⚠️ Notification error: {e}")
+        
         return True
+        
     except Exception as e:
         log_system('error', f"Attendance error: {e}")
         return False
+
+# def save_attendance(student, entry_type='success'):
+#     """Save attendance record"""
+#     try:
+#         today = timezone.now().date()
+#         existing = Attendance.objects.filter(
+#             student=student,
+#             timestamp__date=today,
+#             entry_type='success'
+#         ).exists()
+        
+#         if existing:
+#             print(f"   ℹ️ {student.name} already marked today")
+#             return False
+        
+#         Attendance.objects.create(
+#             student=student,
+#             entry_type=entry_type,
+#             location='Main Door'
+#         )
+#         log_system('success', f"Attendance saved: {student.name}")
+#         return True
+#     except Exception as e:
+#         log_system('error', f"Attendance error: {e}")
+#         return False
 
 
 def print_error_box(title, message):
@@ -323,9 +367,6 @@ class ConnectionManager:
         try:
             if self.arduino.in_waiting > 0:
                 line = self.arduino.readline().decode().strip()
-                # Filter out repetitive status messages
-                if line in ['RESPONSE:DOOR_LOCKED', 'RESPONSE:DOOR_UNLOCKED', 'INFO:Door locked', 'INFO:Door unlocked']:
-                    return None  # Ignore these
                 return line
         except:
             self.arduino_ok = False
@@ -540,15 +581,25 @@ class DoorSystem:
             print("  ╔════════════════════════════════════════════╗")
             print(f"  ║  ✅ ACCESS GRANTED: {recognized_student.name[:25].ljust(25)}║")
             print("  ╚════════════════════════════════════════════╝")
-            
+            print()
+            print("  ┌──────────────────────────────────────────┐")
+            print("  │  ➡️  Sending UNLOCK command to Arduino   │")
+            print("  │  🔓 DOOR UNLOCKED                        │")
+            print("  └──────────────────────────────────────────┘")
             self.conn.send_command("UNLOCK")
+            print()
             save_attendance(recognized_student)
         else:
             print("  ╔════════════════════════════════════════════╗")
             print("  ║  ❌ ACCESS DENIED: Unknown Person          ║")
             print("  ╚════════════════════════════════════════════╝")
-            
+            print()
+            print("  ┌──────────────────────────────────────────┐")
+            print("  │  ➡️  Sending DENIED command to Arduino   │")
+            print("  │  🔒 DOOR REMAINS LOCKED                  │")
+            print("  └──────────────────────────────────────────┘")
             self.conn.send_command("DENIED")
+            print("  🔒 Door remains LOCKED")
             log_system('warning', 'Access denied: Unknown face')
             
             # Save denied image
@@ -559,6 +610,12 @@ class DoorSystem:
                     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                     filepath = os.path.join(denied_dir, f"denied_{ts}.jpg")
                     cv2.imwrite(filepath, last_frame)
+                except:
+                    pass
+            # After saving denied image, add:
+            if NOTIFICATIONS_AVAILABLE and frame is not None:
+                try:
+                    NotificationService.notify_unknown_person(filepath)
                 except:
                     pass
         
@@ -618,12 +675,29 @@ class DoorSystem:
                     msg = self.conn.read_arduino()
                     
                     if msg:
-                        # Only print important messages
+                        # Print Arduino actions
                         if "MOTION" in msg:
+                            print(f"\n📡 [ARDUINO] 🚶 PIR Motion Detected!")
                             self.handle_motion()
                             print("🎯 Waiting for motion...\n")
-                        elif "ERROR" in msg or "STATUS:READY" in msg:
-                            print(f"📡 Arduino: {msg}")
+                        elif "DOOR_UNLOCKED" in msg or "unlocked" in msg.lower():
+                            pass  # Already printed in handle_motion()
+                        elif "DOOR_LOCKED" in msg or "locked" in msg.lower():
+                            pass  # Already printed in handle_motion()
+                        elif "SERVO" in msg:
+                            print(f"📡 [ARDUINO] ⚙️ {msg}")
+                        elif "BUZZER" in msg or "beep" in msg.lower():
+                            print(f"📡 [ARDUINO] 🔊 {msg}")
+                        elif "LED" in msg:
+                            print(f"📡 [ARDUINO] 💡 {msg}")
+                        elif "ERROR" in msg:
+                            print(f"📡 [ARDUINO] ❌ {msg}")
+                        elif "STATUS" in msg or "READY" in msg:
+                            print(f"📡 [ARDUINO] ✅ {msg}")
+                        elif "PONG" in msg or "OK" in msg:
+                            pass  # Ignore ping responses
+                        else:
+                            print(f"📡 [ARDUINO] {msg}")
                 
                 time.sleep(0.1)
                 
@@ -638,8 +712,9 @@ class DoorSystem:
         print("\n🧹 Cleaning up...")
         
         if self.require_arduino and self.conn.arduino_ok:
+            print("   ➡️  Sending LOCK command to Arduino...")
             self.conn.send_command("LOCK")
-            print("   ✅ Door locked")
+            print("   🔒 Door LOCKED")
         
         self.conn.cleanup()
         print("   ✅ Connections closed")
@@ -1335,6 +1410,436 @@ def live_camera_attendance():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# LIVE CAMERA + AUTO DOOR LOCK (No PIR Sensor)
+# ═══════════════════════════════════════════════════════════════════
+
+def live_camera_door_lock():
+    """
+    Live Camera + Auto Door Lock Mode (No PIR Sensor)
+    - Arduino required for door control
+    - No PIR sensor - continuous face scanning
+    - Automatically unlocks door when face recognized
+    - Auto marks attendance
+    """
+    print("\n" + "═" * 58)
+    print("  🚪 LIVE CAMERA + AUTO DOOR LOCK")
+    print("═" * 58)
+    print("  • Arduino required (door control)")
+    print("  • No PIR sensor needed")
+    print("  • Continuous face scanning")
+    print("  • Auto unlocks door on recognition")
+    print("  • Auto marks attendance")
+    print("═" * 58 + "\n")
+    
+    # ─────────────────────────────────────────────────────────────
+    # SETTINGS
+    # ─────────────────────────────────────────────────────────────
+    RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds
+    UNLOCK_DURATION = 5             # Keep door unlocked for 5 seconds
+    PERSON_COOLDOWN = 10            # Wait 10 seconds before unlocking for same person again
+    MIN_CONFIDENCE = 0.45           # Minimum confidence
+    
+    # Track recent unlocks to prevent repeated unlocking
+    recent_unlocks = {}  # {student_id: last_unlock_time}
+    door_unlock_time = 0  # When door was last unlocked
+    door_is_unlocked = False
+    
+    conn = ConnectionManager()
+    
+    # ─────────────────────────────────────────────────────────────
+    # Initialize Camera
+    # ─────────────────────────────────────────────────────────────
+    print("📷 Connecting camera...")
+    ok, msg = conn.connect_camera(CAMERA_INDEX)
+    if not ok:
+        print_error_box("CAMERA NOT CONNECTED", msg + "\n\nPlease connect a USB camera.")
+        return
+    print(f"   ✅ {msg}")
+    
+    # ─────────────────────────────────────────────────────────────
+    # Initialize Arduino
+    # ─────────────────────────────────────────────────────────────
+    print("\n🔌 Connecting Arduino...")
+    ok, msg = conn.connect_arduino()
+    if not ok:
+        print_error_box("ARDUINO NOT CONNECTED", msg + "\n\nPlease connect Arduino via USB.")
+        conn.cleanup()
+        return
+    print(f"   ✅ {msg}")
+    
+    # ─────────────────────────────────────────────────────────────
+    # Initialize Face Recognition
+    # ─────────────────────────────────────────────────────────────
+    print("\n🤖 Loading Face Recognition...")
+    try:
+        service = FaceRecognitionService(tolerance=RECOGNITION_TOLERANCE, camera_index=CAMERA_INDEX)
+        service.refresh_cache()
+        
+        total = Student.objects.filter(is_active=True).count()
+        print(f"   ✅ Ready ({total} registered students)")
+        
+        if total == 0:
+            print_error_box("NO STUDENTS", "No students registered!\n\nPlease register students first.")
+            conn.cleanup()
+            return
+            
+    except Exception as e:
+        print_error_box("FACE RECOGNITION ERROR", str(e))
+        conn.cleanup()
+        return
+    
+    # Get today's attendance count
+    today = timezone.now().date()
+    today_count = Attendance.objects.filter(
+        timestamp__date=today,
+        entry_type='success'
+    ).values('student').distinct().count()
+    
+    print(f"\n📊 Today's attendance: {today_count}/{total} students")
+    
+    # ─────────────────────────────────────────────────────────────
+    # Start System
+    # ─────────────────────────────────────────────────────────────
+    print("\n" + "═" * 58)
+    print("  ✅ SYSTEM STARTED - LIVE CAMERA + DOOR LOCK")
+    print("  ─────────────────────────────────────────────────────")
+    print("  • Continuously scanning for faces")
+    print("  • Door unlocks automatically on recognition")
+    print("  • Green box = Recognized (door unlocks)")
+    print("  • Red box = Unknown (door locked)")
+    print("  • Press R to refresh | Q to quit")
+    print("═" * 58 + "\n")
+    
+    log_system('success', 'Live camera door lock started')
+    
+    cv2.namedWindow('Live Door Lock', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Live Door Lock', 1000, 750)
+    
+    last_recognition_time = 0
+    detected_faces = []
+    
+    # Stats
+    session_unlocks = 0
+    session_marked = 0
+    session_start = time.time()
+    last_connection_check = time.time()
+    
+    # Status messages
+    status_messages = []
+    status_time = 0
+    
+    try:
+        while True:
+            current_time = time.time()
+            
+            # ─────────────────────────────────────────────────
+            # Auto-lock door after UNLOCK_DURATION
+            # ─────────────────────────────────────────────────
+            if door_is_unlocked and (current_time - door_unlock_time >= UNLOCK_DURATION):
+                conn.send_command("LOCK")
+                door_is_unlocked = False
+                print("   🔒 Door auto-locked")
+            
+            # ─────────────────────────────────────────────────
+            # Check connections periodically
+            # ─────────────────────────────────────────────────
+            if current_time - last_connection_check >= CONNECTION_CHECK_INTERVAL:
+                # Check camera
+                if not conn.check_camera():
+                    print_error_box("CAMERA DISCONNECTED", "Camera connection lost!")
+                    for attempt in range(MAX_RECONNECT_ATTEMPTS):
+                        print(f"   Reconnecting camera... ({attempt + 1}/{MAX_RECONNECT_ATTEMPTS})")
+                        ok, _ = conn.connect_camera(CAMERA_INDEX)
+                        if ok:
+                            print("   ✅ Camera reconnected!")
+                            cv2.namedWindow('Live Door Lock', cv2.WINDOW_NORMAL)
+                            break
+                        time.sleep(RECONNECT_WAIT_TIME)
+                    else:
+                        print("   ❌ Could not reconnect camera. Exiting...")
+                        break
+                
+                # Check Arduino
+                if not conn.check_arduino():
+                    print_error_box("ARDUINO DISCONNECTED", "Arduino connection lost!")
+                    for attempt in range(MAX_RECONNECT_ATTEMPTS):
+                        print(f"   Reconnecting Arduino... ({attempt + 1}/{MAX_RECONNECT_ATTEMPTS})")
+                        ok, _ = conn.connect_arduino()
+                        if ok:
+                            print("   ✅ Arduino reconnected!")
+                            break
+                        time.sleep(RECONNECT_WAIT_TIME)
+                    else:
+                        print("   ❌ Could not reconnect Arduino. Exiting...")
+                        break
+                
+                last_connection_check = current_time
+            
+            # ─────────────────────────────────────────────────
+            # Capture frame
+            # ─────────────────────────────────────────────────
+            frame = conn.capture_frame()
+            
+            if frame is None:
+                error_img = np.zeros((500, 800, 3), dtype=np.uint8)
+                cv2.putText(error_img, "CAMERA DISCONNECTED", 
+                           (200, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
+                cv2.imshow('Live Door Lock', error_img)
+                if cv2.waitKey(500) & 0xFF == ord('q'):
+                    break
+                continue
+            
+            # Mirror for natural view
+            frame = cv2.flip(frame, 1)
+            display = frame.copy()
+            h, w = display.shape[:2]
+            
+            # ─────────────────────────────────────────────────
+            # Face Recognition
+            # ─────────────────────────────────────────────────
+            if current_time - last_recognition_time >= RECOGNITION_INTERVAL:
+                detected_faces = []
+                status_messages = []
+                
+                try:
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    import face_recognition
+                    
+                    small_frame = cv2.resize(rgb_frame, (0, 0), fx=0.5, fy=0.5)
+                    face_locations = face_recognition.face_locations(small_frame, model='hog')
+                    
+                    if face_locations:
+                        face_encodings = face_recognition.face_encodings(small_frame, face_locations)
+                        
+                        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+                            # Scale back up
+                            top *= 2
+                            right *= 2
+                            bottom *= 2
+                            left *= 2
+                            
+                            name = "Unknown"
+                            color = (0, 0, 255)  # Red
+                            status = "unknown"
+                            student = None
+                            confidence = 0
+                            
+                            # Compare with known faces
+                            if service.known_face_encodings:
+                                face_distances = face_recognition.face_distance(
+                                    service.known_face_encodings, 
+                                    face_encoding
+                                )
+                                
+                                if len(face_distances) > 0:
+                                    best_match_index = np.argmin(face_distances)
+                                    best_distance = face_distances[best_match_index]
+                                    
+                                    if best_distance <= RECOGNITION_TOLERANCE:
+                                        student = service.known_students[best_match_index]
+                                        confidence = 1 - best_distance
+                                        name = student.name
+                                        
+                                        # Check if should unlock
+                                        if confidence >= MIN_CONFIDENCE:
+                                            last_unlock = recent_unlocks.get(student.id, 0)
+                                            
+                                            if current_time - last_unlock >= PERSON_COOLDOWN:
+                                                # UNLOCK DOOR
+                                                conn.send_command("UNLOCK")
+                                                door_is_unlocked = True
+                                                door_unlock_time = current_time
+                                                session_unlocks += 1
+                                                
+                                                recent_unlocks[student.id] = current_time
+                                                
+                                                color = (0, 255, 0)  # Green
+                                                status = "unlocked"
+                                                
+                                                status_messages.append(f"🔓 DOOR UNLOCKED: {name}")
+                                                print(f"\n🔓 ACCESS GRANTED: {name} ({confidence:.0%})")
+                                                log_system('success', f'Door unlocked: {name}')
+                                                
+                                                # Mark attendance
+                                                already_today = Attendance.objects.filter(
+                                                    student=student,
+                                                    timestamp__date=today,
+                                                    entry_type='success'
+                                                ).exists()
+                                                
+                                                if not already_today:
+                                                    Attendance.objects.create(
+                                                        student=student,
+                                                        entry_type='success',
+                                                        location='Door System'
+                                                    )
+                                                    session_marked += 1
+                                                    today_count += 1
+                                                    status_messages.append(f"✅ Attendance: {name}")
+                                                    print(f"   ✅ Attendance marked")
+                                                    
+                                                    # Send notification
+                                                    if NOTIFICATIONS_AVAILABLE:
+                                                        try:
+                                                            NotificationService.notify_attendance(student, timezone.now())
+                                                        except:
+                                                            pass
+                                                else:
+                                                    status_messages.append(f"ℹ️ {name} (Already today)")
+                                                
+                                                # Sound
+                                                try:
+                                                    import winsound
+                                                    winsound.Beep(1200, 200)
+                                                except:
+                                                    pass
+                                            else:
+                                                # Cooldown
+                                                remaining = int(PERSON_COOLDOWN - (current_time - last_unlock))
+                                                color = (255, 165, 0)  # Orange
+                                                status = "cooldown"
+                                                status_messages.append(f"⏳ {name} (Wait {remaining}s)")
+                                        else:
+                                            color = (0, 165, 255)  # Low confidence
+                                            status = "low_conf"
+                            
+                            detected_faces.append({
+                                'name': name,
+                                'location': (top, right, bottom, left),
+                                'color': color,
+                                'status': status,
+                                'confidence': confidence
+                            })
+                    
+                    if not face_locations:
+                        status_messages = ["📷 Scanning..."]
+                    
+                    status_time = current_time
+                    
+                except Exception as e:
+                    print(f"   ❌ Recognition error: {e}")
+                    status_messages = [f"Error: {str(e)[:30]}"]
+                
+                last_recognition_time = current_time
+            
+            # ─────────────────────────────────────────────────
+            # Draw UI - Header
+            # ─────────────────────────────────────────────────
+            header_color = (0, 100, 0) if door_is_unlocked else (40, 40, 40)
+            cv2.rectangle(display, (0, 0), (w, 85), header_color, -1)
+            
+            door_status = "🔓 UNLOCKED" if door_is_unlocked else "🔒 LOCKED"
+            cv2.putText(display, f"LIVE DOOR LOCK - {door_status}", 
+                       (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0) if door_is_unlocked else (255, 255, 255), 2)
+            
+            # Stats
+            elapsed = int(current_time - session_start)
+            elapsed_str = f"{elapsed // 60}:{elapsed % 60:02d}"
+            stats_text = f"Today: {today_count}/{total} | Unlocks: {session_unlocks} | Marked: {session_marked} | Time: {elapsed_str}"
+            cv2.putText(display, stats_text, 
+                       (15, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+            
+            # Door status indicator
+            indicator_color = (0, 255, 0) if door_is_unlocked else (0, 0, 255)
+            cv2.circle(display, (w - 25, 40), 15, indicator_color, -1)
+            
+            # ─────────────────────────────────────────────────
+            # Draw face boxes
+            # ─────────────────────────────────────────────────
+            for face in detected_faces:
+                top, right, bottom, left = face['location']
+                color = face['color']
+                name = face['name']
+                conf = face.get('confidence', 0)
+                
+                cv2.rectangle(display, (left, top), (right, bottom), color, 3)
+                
+                name_text = f"{name}"
+                if conf > 0:
+                    name_text += f" ({conf:.0%})"
+                
+                text_size = cv2.getTextSize(name_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+                cv2.rectangle(display, 
+                             (left, bottom), 
+                             (left + text_size[0] + 10, bottom + text_size[1] + 15), 
+                             color, -1)
+                cv2.putText(display, name_text, 
+                           (left + 5, bottom + text_size[1] + 5), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # ─────────────────────────────────────────────────
+            # Draw status messages
+            # ─────────────────────────────────────────────────
+            if status_messages and (current_time - status_time < 3):
+                msg_height = 35 * len(status_messages) + 15
+                cv2.rectangle(display, (0, h - msg_height), (w, h), (50, 50, 50), -1)
+                
+                for i, msg in enumerate(status_messages[:5]):
+                    y = h - msg_height + 30 + (i * 35)
+                    
+                    if "UNLOCKED" in msg:
+                        color = (0, 255, 0)
+                    elif "Attendance" in msg:
+                        color = (0, 255, 0)
+                    elif "Already" in msg:
+                        color = (0, 255, 255)
+                    elif "Wait" in msg:
+                        color = (0, 165, 255)
+                    else:
+                        color = (180, 180, 180)
+                    
+                    cv2.putText(display, msg, (15, y), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            else:
+                cv2.rectangle(display, (0, h - 45), (w, h), (50, 50, 50), -1)
+                cv2.putText(display, "Scanning for faces... | R = Refresh | Q = Quit", 
+                           (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 150), 1)
+            
+            cv2.imshow('Live Door Lock', display)
+            
+            # ─────────────────────────────────────────────────
+            # Handle keyboard
+            # ─────────────────────────────────────────────────
+            key = cv2.waitKey(1) & 0xFF
+            
+            if key == ord('q') or key == ord('Q'):
+                break
+            elif key == ord('r') or key == ord('R'):
+                print("\n🔄 Refreshing face database...")
+                service.refresh_cache()
+                total = Student.objects.filter(is_active=True).count()
+                print(f"   ✅ Reloaded {total} students")
+                status_messages = [f"🔄 Refreshed: {total} students"]
+                status_time = current_time
+                
+    except KeyboardInterrupt:
+        pass
+    
+    finally:
+        # Lock door before exit
+        if door_is_unlocked:
+            conn.send_command("LOCK")
+            print("   🔒 Door locked")
+        
+        conn.cleanup()
+        
+        elapsed = int(time.time() - session_start)
+        elapsed_str = f"{elapsed // 60} min {elapsed % 60} sec"
+        
+        print("\n" + "═" * 58)
+        print("  📊 SESSION SUMMARY")
+        print("  ─────────────────────────────────────────────────────")
+        print(f"  • Duration        : {elapsed_str}")
+        print(f"  • Door unlocks    : {session_unlocks}")
+        print(f"  • Attendance marked: {session_marked}")
+        print(f"  • Total today     : {today_count}/{total}")
+        print("═" * 58)
+        
+        log_system('info', f'Live door lock ended. Unlocks: {session_unlocks}, Marked: {session_marked}')
+        print("\n👋 Done!")
+
+
+# ═══════════════════════════════════════════════════════════════════
 # MAIN MENU
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1344,18 +1849,19 @@ if __name__ == '__main__':
     print("═" * 58)
     print("\n  SELECT MODE:\n")
     print("  ┌─────────────────────────────────────────────────────┐")
-    print("  │  1. Full Mode        (Arduino + Camera + Door)     │")
+    print("  │  1. Full Mode        (Arduino + Camera + PIR)      │")
     print("  │  2. Simulation       (Camera + Keyboard trigger)   │")
     print("  │  3. Quick Test       (Single face recognition)     │")
     print("  │  4. Live View        (Continuous recognition)      │")
     print("  │  5. Live Attendance  (Auto attendance - No Arduino)│")
+    print("  │  6. Live Door Lock   (Camera + Arduino - No PIR)   │")
     print("  └─────────────────────────────────────────────────────┘")
     print("\n" + "═" * 58)
     
-    choice = input("\n  Enter choice (1-5): ").strip()
+    choice = input("\n  Enter choice (1-6): ").strip()
     
     if choice == '1':
-        print("\n  📌 Full Mode: Arduino + Camera required")
+        print("\n  📌 Full Mode: Arduino + Camera + PIR required")
         DoorSystem(require_arduino=True).run()
         
     elif choice == '2':
@@ -1373,6 +1879,10 @@ if __name__ == '__main__':
     elif choice == '5':
         print("\n  📌 Live Attendance: Auto attendance (no Arduino)")
         live_camera_attendance()
+        
+    elif choice == '6':
+        print("\n  📌 Live Door Lock: Camera + Arduino (no PIR sensor)")
+        live_camera_door_lock()
         
     else:
         print("\n  ⚠️ Invalid choice. Running Live Attendance...")

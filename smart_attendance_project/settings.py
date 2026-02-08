@@ -166,11 +166,11 @@ ADMIN_EMAIL = env('ADMIN_EMAIL')
 # Enable/Disable notifications
 NOTIFICATIONS_ENABLED = True
 EMAIL_NOTIFICATIONS = True
-TELEGRAM_NOTIFICATIONS = True
+TELEGRAM_NOTIFICATIONS = True  # Set to True when VPN is on
 
 # ═══════════════════════════════════════════════════════════════════
 # TELEGRAM CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
 
-TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN'  # ← Get from @BotFather
-TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID'      # ← Your chat/group ID
+TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='')  # Get from @BotFather
+TELEGRAM_CHAT_ID = env('TELEGRAM_CHAT_ID', default='')      # Your chat/group ID

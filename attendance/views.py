@@ -31,6 +31,12 @@ from .services.face_recognition_service import (
 
 # Camera Index
 CAMERA_INDEX = 0
+# Notification Service
+try:
+    from attendance.services.notification_service import NotificationService
+    NOTIFICATIONS_AVAILABLE = True
+except:
+    NOTIFICATIONS_AVAILABLE = False
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -578,6 +584,13 @@ def handle_student_registration(request):
             photo=saved_photo_path,  # Path to saved image
             is_active=True
         )
+        
+        # Send welcome email
+        if NOTIFICATIONS_AVAILABLE and user and generated_password:
+            try:
+                NotificationService.notify_registration(student, generated_username, generated_password)
+            except Exception as e:
+                print(f"Notification error: {e}")
         
         # Refresh face recognition cache
         service = get_face_recognition_service()

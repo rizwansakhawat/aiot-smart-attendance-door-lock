@@ -135,3 +135,42 @@ ARDUINO_BAUD_RATE = 9600
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════
+# EMAIL CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+import environ
+import os
+
+env = environ.Env()
+# reading .env file
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+# Option 1: Gmail (Recommended for testing)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+ #  (App Password, not regular password)
+DEFAULT_FROM_EMAIL = 'Smart Attendance <your.email@gmail.com>'
+
+# Fetching from .env
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+ADMIN_EMAIL = env('ADMIN_EMAIL')
+
+# Enable/Disable notifications
+NOTIFICATIONS_ENABLED = True
+EMAIL_NOTIFICATIONS = True
+TELEGRAM_NOTIFICATIONS = True
+
+# ═══════════════════════════════════════════════════════════════════
+# TELEGRAM CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+
+TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN'  # ← Get from @BotFather
+TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID'      # ← Your chat/group ID

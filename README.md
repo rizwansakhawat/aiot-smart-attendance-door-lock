@@ -13,7 +13,7 @@ The platform supports **role-based access**, **Stripe payment integration**, and
 ## Authentication
 
 * Email & Password Login
-* Social Login (Google, GitHub)
+* Social Login (Google, GitHub, linkedin)
 * JWT Authentication
 * Role-Based Access Control
 
@@ -78,7 +78,7 @@ Backend
 
 Database
 
-* PostgreSQL / SQLite
+* SQLite
 
 Authentication
 

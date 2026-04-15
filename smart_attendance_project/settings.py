@@ -150,27 +150,47 @@ env = environ.Env()
 # reading .env file
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-# Option 1: Gmail (Recommended for testing)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
- #  (App Password, not regular password)
-DEFAULT_FROM_EMAIL = 'Smart Attendance <your.email@gmail.com>'
+# SMTP provider configuration (Gmail/SendGrid/Mailgun/other)
+EMAIL_BACKEND = env(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=8)
+DEFAULT_FROM_EMAIL = env(
+    'DEFAULT_FROM_EMAIL',
+    default='Smart Attendance <your.email@gmail.com>'
+)
 
 # Fetching from .env
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 ADMIN_EMAIL = env('ADMIN_EMAIL')
 
+# Celery configuration for background notification delivery
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379/1')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_NOTIFICATIONS_ENABLED = env.bool('CELERY_NOTIFICATIONS_ENABLED', default=True)
+
 # Enable/Disable notifications
 NOTIFICATIONS_ENABLED = True
 EMAIL_NOTIFICATIONS = True
-TELEGRAM_NOTIFICATIONS = True  # Set to True when VPN is on
+TELEGRAM_NOTIFICATIONS = False  # Set to True when VPN is on
 
 # ═══════════════════════════════════════════════════════════════════
 # TELEGRAM CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='')  # Get from @BotFather
 TELEGRAM_CHAT_ID = env('TELEGRAM_CHAT_ID', default='')      # Your chat/group ID
+TELEGRAM_REQUEST_TIMEOUT = env.int('TELEGRAM_REQUEST_TIMEOUT', default=10)
+TELEGRAM_RETRY_ATTEMPTS = env.int('TELEGRAM_RETRY_ATTEMPTS', default=3)
+TELEGRAM_RETRY_DELAY_SECONDS = env.float('TELEGRAM_RETRY_DELAY_SECONDS', default=1.0)
+TELEGRAM_FAIL_COOLDOWN_SECONDS = env.int('TELEGRAM_FAIL_COOLDOWN_SECONDS', default=300)

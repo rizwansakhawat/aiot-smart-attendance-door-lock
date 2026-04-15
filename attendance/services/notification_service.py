@@ -5,6 +5,8 @@ Notification Service - Email & Telegram
 """
 
 import os
+import smtplib
+import time
 import requests
 from datetime import datetime, timedelta
 from django.conf import settings
@@ -12,6 +14,13 @@ from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.utils import timezone
+
+from attendance.tasks import (
+    send_attendance_notification_task,
+    send_daily_report_task,
+    send_registration_notification_task,
+    send_unknown_person_alert_task,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -24,8 +33,20 @@ class EmailNotificationService:
     @staticmethod
     def is_enabled():
         """Check if email notifications are enabled"""
-        return getattr(settings, 'EMAIL_NOTIFICATIONS', False) and \
-               getattr(settings, 'NOTIFICATIONS_ENABLED', False)
+        return bool(
+            getattr(settings, 'EMAIL_NOTIFICATIONS', False) and
+            getattr(settings, 'NOTIFICATIONS_ENABLED', False)
+        )
+
+    @staticmethod
+    def _log_email_error(prefix, error):
+        if isinstance(error, smtplib.SMTPAuthenticationError):
+            print(
+                f"   ❌ {prefix}: SMTP auth failed. "
+                "Use Gmail App Password (16 chars), not account password."
+            )
+            return
+        print(f"   ❌ {prefix}: {error}")
     
     @staticmethod
     def send_attendance_notification(student, timestamp=None):
@@ -97,7 +118,7 @@ class EmailNotificationService:
             return True
             
         except Exception as e:
-            print(f"   ❌ Email failed: {e}")
+            EmailNotificationService._log_email_error('Email failed', e)
             return False
     
     @staticmethod
@@ -167,7 +188,7 @@ class EmailNotificationService:
             return True
             
         except Exception as e:
-            print(f"   ❌ Welcome email failed: {e}")
+            EmailNotificationService._log_email_error('Welcome email failed', e)
             return False
     
     @staticmethod
@@ -235,7 +256,7 @@ class EmailNotificationService:
             return True
             
         except Exception as e:
-            print(f"   ❌ Alert email failed: {e}")
+            EmailNotificationService._log_email_error('Alert email failed', e)
             return False
     
     @staticmethod
@@ -325,7 +346,7 @@ class EmailNotificationService:
             return True
             
         except Exception as e:
-            print(f"   ❌ Daily report failed: {e}")
+            EmailNotificationService._log_email_error('Daily report failed', e)
             return False
 
 
@@ -335,19 +356,57 @@ class EmailNotificationService:
 
 class TelegramNotificationService:
     """Handle all Telegram notifications"""
+
+    _disabled_until = None
     
     @staticmethod
     def is_enabled():
         """Check if Telegram notifications are enabled"""
-        return getattr(settings, 'TELEGRAM_NOTIFICATIONS', False) and \
-               getattr(settings, 'NOTIFICATIONS_ENABLED', False) and \
-               getattr(settings, 'TELEGRAM_BOT_TOKEN', None) and \
-               getattr(settings, 'TELEGRAM_CHAT_ID', None)
+        return bool(
+            getattr(settings, 'TELEGRAM_NOTIFICATIONS', False) and
+            getattr(settings, 'NOTIFICATIONS_ENABLED', False) and
+            getattr(settings, 'TELEGRAM_BOT_TOKEN', None) and
+            getattr(settings, 'TELEGRAM_CHAT_ID', None)
+        )
+
+    @staticmethod
+    def _is_in_cooldown():
+        if TelegramNotificationService._disabled_until is None:
+            return False
+        return timezone.now() < TelegramNotificationService._disabled_until
+
+    @staticmethod
+    def _start_cooldown(reason):
+        cooldown_seconds = int(getattr(settings, 'TELEGRAM_FAIL_COOLDOWN_SECONDS', 300))
+        TelegramNotificationService._disabled_until = timezone.now() + timedelta(seconds=cooldown_seconds)
+        print(
+            "   ⚠️ Telegram temporarily disabled for "
+            f"{cooldown_seconds}s due to repeated failures: {reason}"
+        )
+
+    @staticmethod
+    def _request_with_retry(url, *, data=None, files=None):
+        timeout = int(getattr(settings, 'TELEGRAM_REQUEST_TIMEOUT', 10))
+        attempts = int(getattr(settings, 'TELEGRAM_RETRY_ATTEMPTS', 3))
+        retry_delay = float(getattr(settings, 'TELEGRAM_RETRY_DELAY_SECONDS', 1.0))
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return requests.post(url, data=data, files=files, timeout=timeout)
+            except requests.exceptions.RequestException as exc:
+                if attempt == attempts:
+                    raise exc
+                print(f"   ⚠️ Telegram attempt {attempt}/{attempts} failed: {exc}")
+                time.sleep(retry_delay)
     
     @staticmethod
     def send_message(message, parse_mode='HTML'):
         """Send a text message to Telegram"""
         if not TelegramNotificationService.is_enabled():
+            return False
+
+        if TelegramNotificationService._is_in_cooldown():
+            print("   ⚠️ Telegram skipped (cooldown active)")
             return False
         
         try:
@@ -362,23 +421,30 @@ class TelegramNotificationService:
                 'parse_mode': parse_mode
             }
             
-            response = requests.post(url, data=data, timeout=10)
+            response = TelegramNotificationService._request_with_retry(url, data=data)
             
             if response.status_code == 200:
+                TelegramNotificationService._disabled_until = None
                 print(f"   📱 Telegram message sent")
                 return True
             else:
                 print(f"   ❌ Telegram failed: {response.text}")
+                TelegramNotificationService._start_cooldown(response.text)
                 return False
                 
         except Exception as e:
             print(f"   ❌ Telegram error: {e}")
+            TelegramNotificationService._start_cooldown(e)
             return False
     
     @staticmethod
     def send_photo(photo_path, caption=""):
         """Send a photo to Telegram"""
         if not TelegramNotificationService.is_enabled():
+            return False
+
+        if TelegramNotificationService._is_in_cooldown():
+            print("   ⚠️ Telegram photo skipped (cooldown active)")
             return False
         
         if not os.path.exists(photo_path):
@@ -398,17 +464,20 @@ class TelegramNotificationService:
                 }
                 files = {'photo': photo}
                 
-                response = requests.post(url, data=data, files=files, timeout=30)
+                response = TelegramNotificationService._request_with_retry(url, data=data, files=files)
             
             if response.status_code == 200:
+                TelegramNotificationService._disabled_until = None
                 print(f"   📱 Telegram photo sent")
                 return True
             else:
                 print(f"   ❌ Telegram photo failed: {response.text}")
+                TelegramNotificationService._start_cooldown(response.text)
                 return False
                 
         except Exception as e:
             print(f"   ❌ Telegram photo error: {e}")
+            TelegramNotificationService._start_cooldown(e)
             return False
     
     @staticmethod
@@ -454,12 +523,17 @@ Please check immediately.
             return TelegramNotificationService.send_message(message)
     
     @staticmethod
-    def send_daily_summary():
+    def send_daily_summary(date=None):
         """Send daily attendance summary"""
         try:
             from attendance.models import Student, Attendance
             
-            today = timezone.now().date()
+            today = date or timezone.now().date()
+            if isinstance(today, str):
+                from django.utils.dateparse import parse_date
+
+                parsed_date = parse_date(today)
+                today = parsed_date or timezone.now().date()
             
             total = Student.objects.filter(is_active=True).count()
             present = Attendance.objects.filter(
@@ -495,6 +569,19 @@ Please check immediately.
 
 class NotificationService:
     """Unified notification service - sends to all enabled channels"""
+
+    @staticmethod
+    def _use_celery():
+        return getattr(settings, 'CELERY_NOTIFICATIONS_ENABLED', False)
+
+    @staticmethod
+    def _queue_task(task, *args):
+        try:
+            task.delay(*args)
+            return True
+        except Exception as e:
+            print(f"   ⚠️ Celery queue failed: {e}")
+            return False
     
     @staticmethod
     def notify_attendance(student, timestamp=None):
@@ -503,6 +590,12 @@ class NotificationService:
             'email': False,
             'telegram': False
         }
+
+        if NotificationService._use_celery() and (EmailNotificationService.is_enabled() or TelegramNotificationService.is_enabled()):
+            if NotificationService._queue_task(send_attendance_notification_task, student.id, (timestamp or timezone.now()).isoformat()):
+                results['email'] = True
+                results['telegram'] = True
+                return results
         
         # Email
         if EmailNotificationService.is_enabled():
@@ -521,6 +614,12 @@ class NotificationService:
             'email': False,
             'telegram': False
         }
+
+        if NotificationService._use_celery() and (EmailNotificationService.is_enabled() or TelegramNotificationService.is_enabled()):
+            if NotificationService._queue_task(send_unknown_person_alert_task, photo_path):
+                results['email'] = True
+                results['telegram'] = True
+                return results
         
         # Email
         if EmailNotificationService.is_enabled():
@@ -539,6 +638,12 @@ class NotificationService:
             'email': False,
             'telegram': False
         }
+
+        if NotificationService._use_celery() and (EmailNotificationService.is_enabled() or TelegramNotificationService.is_enabled()):
+            if NotificationService._queue_task(send_registration_notification_task, student.id, username, password):
+                results['email'] = True
+                results['telegram'] = True
+                return results
         
         # Email welcome
         if EmailNotificationService.is_enabled():
@@ -566,6 +671,12 @@ class NotificationService:
             'email': False,
             'telegram': False
         }
+
+        if NotificationService._use_celery() and (EmailNotificationService.is_enabled() or TelegramNotificationService.is_enabled()):
+            if NotificationService._queue_task(send_daily_report_task, timezone.now().date().isoformat()):
+                results['email'] = True
+                results['telegram'] = True
+                return results
         
         if EmailNotificationService.is_enabled():
             results['email'] = EmailNotificationService.send_daily_report()

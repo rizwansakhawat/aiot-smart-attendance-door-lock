@@ -24,6 +24,7 @@ import django
 django.setup()
 
 from django.utils import timezone
+from django.conf import settings
 from attendance.models import Student, Attendance, SystemLog
 from attendance.services.face_recognition_service import FaceRecognitionService
 
@@ -52,7 +53,11 @@ except ImportError:
 SERIAL_PORT = None
 BAUD_RATE = 9600
 CAMERA_INDEX = 0
-RECOGNITION_TOLERANCE = 0.5
+RECOGNITION_TOLERANCE = float(getattr(settings, 'FACE_RECOGNITION_TOLERANCE', 0.45))
+MATCH_SEPARATION_MARGIN = float(getattr(settings, 'FACE_RECOGNITION_MIN_GAP', 0.04))
+MIN_MATCH_CONFIDENCE = float(getattr(settings, 'FACE_RECOGNITION_MIN_CONFIDENCE', 0.58))
+REQUIRED_CONFIRM_FRAMES = int(getattr(settings, 'FACE_RECOGNITION_CONFIRM_FRAMES', 2))
+CONFIRM_WINDOW_SECONDS = float(getattr(settings, 'FACE_RECOGNITION_CONFIRM_WINDOW_SECONDS', 1.5))
 RECOGNITION_ATTEMPTS = 3
 CAPTURE_DELAY = 0.5
 
@@ -91,7 +96,7 @@ def log_system(log_type, message):
         pass
 
 
-def save_attendance(student, entry_type='success'):
+def save_attendance(student, entry_type='success', location='Main Door'):
     """Save attendance record and send notifications"""
     try:
         today = timezone.now().date()
@@ -109,7 +114,7 @@ def save_attendance(student, entry_type='success'):
         attendance = Attendance.objects.create(
             student=student,
             entry_type=entry_type,
-            location='Main Door'
+            location=location
         )
         
         log_system('success', f"Attendance saved: {student.name}")
@@ -543,6 +548,8 @@ class DoorSystem:
         print("━" * 50)
         
         recognized_student = None
+        recognized_confidence = 0
+        recognition_votes = {}
         last_frame = None
         
         for attempt in range(RECOGNITION_ATTEMPTS):
@@ -566,10 +573,16 @@ class DoorSystem:
             student, confidence = self.recognize_face(frame)
             
             if student:
+                votes = recognition_votes.get(student.id, 0) + 1
+                recognition_votes[student.id] = votes
                 print(f"  ✅ Recognized: {student.name}")
                 print(f"  📊 Confidence: {confidence:.1%}")
-                recognized_student = student
-                break
+                print(f"  🔎 Confirmation: {votes}/{REQUIRED_CONFIRM_FRAMES}")
+
+                if votes >= REQUIRED_CONFIRM_FRAMES:
+                    recognized_student = student
+                    recognized_confidence = confidence
+                    break
             else:
                 print("  ❌ Face not recognized")
             
@@ -581,6 +594,7 @@ class DoorSystem:
             print("  ╔════════════════════════════════════════════╗")
             print(f"  ║  ✅ ACCESS GRANTED: {recognized_student.name[:25].ljust(25)}║")
             print("  ╚════════════════════════════════════════════╝")
+            print(f"  📊 Final Confidence: {recognized_confidence:.1%}")
             print()
             print("  ┌──────────────────────────────────────────┐")
             print("  │  ➡️  Sending UNLOCK command to Arduino   │")
@@ -862,7 +876,7 @@ def quick_test():
     # Load face recognition
     print("\n🤖 Loading face recognition...")
     try:
-        service = FaceRecognitionService(tolerance=0.5, camera_index=CAMERA_INDEX)
+        service = FaceRecognitionService(tolerance=RECOGNITION_TOLERANCE, camera_index=CAMERA_INDEX)
         service.refresh_cache()
         print("   ✅ Ready")
     except Exception as e:
@@ -955,7 +969,7 @@ def live_view():
     
     print("\n🤖 Loading...")
     try:
-        service = FaceRecognitionService(tolerance=0.5, camera_index=CAMERA_INDEX)
+        service = FaceRecognitionService(tolerance=RECOGNITION_TOLERANCE, camera_index=CAMERA_INDEX)
         service.refresh_cache()
         print("   ✅ Ready")
     except Exception as e:
@@ -1041,10 +1055,11 @@ def live_camera_attendance():
     # ─────────────────────────────────────────────────────────────
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds (faster for multi)
     ATTENDANCE_COOLDOWN = 30        # 30 seconds before same person can mark again
-    MIN_CONFIDENCE = 0.45           # Minimum confidence for attendance
+    MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence for attendance
     
     # Track recent attendance to prevent duplicates
     recent_attendance = {}  # {student_id: last_time}
+    recent_confirms = {}    # {student_id: (count, last_seen_time)}
     
     conn = ConnectionManager()
     
@@ -1213,32 +1228,37 @@ def live_camera_attendance():
                                 if len(face_distances) > 0:
                                     best_match_index = np.argmin(face_distances)
                                     best_distance = face_distances[best_match_index]
+                                    sorted_distances = np.sort(face_distances)
+                                    second_best_distance = sorted_distances[1] if len(sorted_distances) > 1 else 1.0
+                                    distance_gap = float(second_best_distance - best_distance)
+                                    is_separated = len(sorted_distances) == 1 or distance_gap >= MATCH_SEPARATION_MARGIN
                                     
-                                    if best_distance <= RECOGNITION_TOLERANCE:
+                                    if best_distance <= RECOGNITION_TOLERANCE and is_separated:
                                         student = service.known_students[best_match_index]
                                         confidence = 1 - best_distance
                                         name = student.name
                                         
                                         # Check cooldown and mark attendance
                                         if confidence >= MIN_CONFIDENCE:
+                                            prev_count, prev_seen = recent_confirms.get(student.id, (0, 0))
+                                            if current_time - prev_seen > CONFIRM_WINDOW_SECONDS:
+                                                prev_count = 0
+                                            confirm_count = prev_count + 1
+                                            recent_confirms[student.id] = (confirm_count, current_time)
+
+                                            if confirm_count < REQUIRED_CONFIRM_FRAMES:
+                                                color = (255, 200, 0)
+                                                status = "confirming"
+                                                status_messages.append(
+                                                    f"🔎 {name} confirming {confirm_count}/{REQUIRED_CONFIRM_FRAMES}"
+                                                )
+                                                continue
+
                                             last_marked = recent_attendance.get(student.id, 0)
                                             
                                             if current_time - last_marked >= ATTENDANCE_COOLDOWN:
-                                                # Check if already marked today
-                                                already_today = Attendance.objects.filter(
-                                                    student=student,
-                                                    timestamp__date=today,
-                                                    entry_type='success'
-                                                ).exists()
-                                                
-                                                if not already_today:
-                                                    # Mark attendance
-                                                    Attendance.objects.create(
-                                                        student=student,
-                                                        entry_type='success',
-                                                        location='Camera Attendance'
-                                                    )
-                                                    
+                                                # Mark attendance using shared helper (also sends notifications)
+                                                if save_attendance(student, location='Camera Attendance'):
                                                     session_marked += 1
                                                     today_count += 1
                                                     
@@ -1247,7 +1267,6 @@ def live_camera_attendance():
                                                     
                                                     status_messages.append(f"✅ MARKED: {name}")
                                                     print(f"✅ Attendance marked: {name} ({confidence:.0%})")
-                                                    log_system('success', f'Attendance: {name}')
                                                     
                                                     # Sound
                                                     try:
@@ -1259,6 +1278,8 @@ def live_camera_attendance():
                                                     color = (0, 255, 255)  # Yellow
                                                     status = "already"
                                                     status_messages.append(f"ℹ️ {name} (Already today)")
+
+                                                recent_confirms[student.id] = (0, current_time)
                                                 
                                                 recent_attendance[student.id] = current_time
                                             else:
@@ -1437,10 +1458,11 @@ def live_camera_door_lock():
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds
     UNLOCK_DURATION = 5             # Keep door unlocked for 5 seconds
     PERSON_COOLDOWN = 10            # Wait 10 seconds before unlocking for same person again
-    MIN_CONFIDENCE = 0.45           # Minimum confidence
+    MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
     
     # Track recent unlocks to prevent repeated unlocking
     recent_unlocks = {}  # {student_id: last_unlock_time}
+    recent_confirms = {} # {student_id: (count, last_seen_time)}
     door_unlock_time = 0  # When door was last unlocked
     door_is_unlocked = False
     
@@ -1634,14 +1656,32 @@ def live_camera_door_lock():
                                 if len(face_distances) > 0:
                                     best_match_index = np.argmin(face_distances)
                                     best_distance = face_distances[best_match_index]
+                                    sorted_distances = np.sort(face_distances)
+                                    second_best_distance = sorted_distances[1] if len(sorted_distances) > 1 else 1.0
+                                    distance_gap = float(second_best_distance - best_distance)
+                                    is_separated = len(sorted_distances) == 1 or distance_gap >= MATCH_SEPARATION_MARGIN
                                     
-                                    if best_distance <= RECOGNITION_TOLERANCE:
+                                    if best_distance <= RECOGNITION_TOLERANCE and is_separated:
                                         student = service.known_students[best_match_index]
                                         confidence = 1 - best_distance
                                         name = student.name
                                         
                                         # Check if should unlock
                                         if confidence >= MIN_CONFIDENCE:
+                                            prev_count, prev_seen = recent_confirms.get(student.id, (0, 0))
+                                            if current_time - prev_seen > CONFIRM_WINDOW_SECONDS:
+                                                prev_count = 0
+                                            confirm_count = prev_count + 1
+                                            recent_confirms[student.id] = (confirm_count, current_time)
+
+                                            if confirm_count < REQUIRED_CONFIRM_FRAMES:
+                                                color = (255, 200, 0)
+                                                status = "confirming"
+                                                status_messages.append(
+                                                    f"🔎 {name} confirming {confirm_count}/{REQUIRED_CONFIRM_FRAMES}"
+                                                )
+                                                continue
+
                                             last_unlock = recent_unlocks.get(student.id, 0)
                                             
                                             if current_time - last_unlock >= PERSON_COOLDOWN:
@@ -1660,32 +1700,16 @@ def live_camera_door_lock():
                                                 print(f"\n🔓 ACCESS GRANTED: {name} ({confidence:.0%})")
                                                 log_system('success', f'Door unlocked: {name}')
                                                 
-                                                # Mark attendance
-                                                already_today = Attendance.objects.filter(
-                                                    student=student,
-                                                    timestamp__date=today,
-                                                    entry_type='success'
-                                                ).exists()
-                                                
-                                                if not already_today:
-                                                    Attendance.objects.create(
-                                                        student=student,
-                                                        entry_type='success',
-                                                        location='Door System'
-                                                    )
+                                                # Mark attendance using shared helper (also sends notifications)
+                                                if save_attendance(student, location='Door System'):
                                                     session_marked += 1
                                                     today_count += 1
                                                     status_messages.append(f"✅ Attendance: {name}")
                                                     print(f"   ✅ Attendance marked")
-                                                    
-                                                    # Send notification
-                                                    if NOTIFICATIONS_AVAILABLE:
-                                                        try:
-                                                            NotificationService.notify_attendance(student, timezone.now())
-                                                        except:
-                                                            pass
                                                 else:
                                                     status_messages.append(f"ℹ️ {name} (Already today)")
+
+                                                recent_confirms[student.id] = (0, current_time)
                                                 
                                                 # Sound
                                                 try:

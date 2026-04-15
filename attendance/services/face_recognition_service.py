@@ -7,8 +7,8 @@ Used by student registration and door access system.
 Author: Your Name
 Project: AIoT-Based Smart Attendance and Door Lock System
 
-⚠️ IMPORTANT: This version is configured for USB camera (Index 1)
-   Laptop camera (Index 0) is disabled due to blue screen issues
+⚠️ IMPORTANT: Camera index is configurable.
+    Keep CAMERA_INDEX in settings.py aligned with your working camera device.
 """
 
 import face_recognition
@@ -23,13 +23,11 @@ from typing import Optional, List, Tuple, Dict, Any
 # ═══════════════════════════════════════════════════════════════════
 # CAMERA CONFIGURATION - IMPORTANT!
 # ═══════════════════════════════════════════════════════════════════
-# Your laptop camera (index 1) causes blue screen errors
-# Only USB camera (index 0) should be used
-
-BROKEN_CAMERA_INDEX = 0
-WORKING_CAMERA_INDEX = 0 # No broken camera
-USB_CAMERA_INDEX = 0      # ✅ Your working camera
-DEFAULT_CAMERA_INDEX = 0  # ✅ Use Camera 0
+# Default camera indices (customize from Django settings when needed)
+BROKEN_CAMERA_INDEX = -1
+WORKING_CAMERA_INDEX = 0
+USB_CAMERA_INDEX = 0
+DEFAULT_CAMERA_INDEX = 0
 
 # ═══════════════════════════════════════════════════════════════════
 
@@ -66,7 +64,7 @@ def get_camera_index() -> int:
     Get the safe camera index to use
     
     Returns:
-        Camera index (always USB camera = 1)
+        Camera index
     """
     # Try to get from Django settings
     if DJANGO_SETTINGS_AVAILABLE:
@@ -74,8 +72,8 @@ def get_camera_index() -> int:
             configured_index = getattr(settings, 'CAMERA_INDEX', USB_CAMERA_INDEX)
             # Safety check: never use broken laptop camera
             if configured_index == BROKEN_CAMERA_INDEX:
-                print("⚠️ WARNING: Camera index 0 is disabled (laptop camera broken)")
-                print("   Automatically using USB camera (index 1)")
+                print("⚠️ WARNING: Configured camera index is marked as broken")
+                print("   Automatically using default USB camera index")
                 return USB_CAMERA_INDEX
             return configured_index
         except:
@@ -108,6 +106,19 @@ class FaceRecognitionService:
         """
         self.tolerance = tolerance
         self.model = model
+        self.min_match_confidence = 0.58
+        self.min_match_gap = 0.04
+
+        if DJANGO_SETTINGS_AVAILABLE:
+            try:
+                self.min_match_confidence = float(
+                    getattr(settings, 'FACE_RECOGNITION_MIN_CONFIDENCE', self.min_match_confidence)
+                )
+                self.min_match_gap = float(
+                    getattr(settings, 'FACE_RECOGNITION_MIN_GAP', self.min_match_gap)
+                )
+            except Exception:
+                pass
         
         # Camera configuration - Use Camera 0
         if camera_index is None:
@@ -136,8 +147,9 @@ class FaceRecognitionService:
         print("=" * 50)
         print(f"   Tolerance: {self.tolerance}")
         print(f"   Model: {self.model}")
-        print(f"   📷 Camera Index: {self.camera_index} (USB Camera)")
-        print(f"   ⚠️ Laptop camera (index 0) is DISABLED")
+        print(f"   📷 Camera Index: {self.camera_index}")
+        print(f"   Min Confidence: {self.min_match_confidence:.2f}")
+        print(f"   Min Distance Gap: {self.min_match_gap:.2f}")
         print("=" * 50)
     
     # ═══════════════════════════════════════════════════════════════
@@ -426,6 +438,8 @@ class FaceRecognitionService:
             'student': None,
             'confidence': 0,
             'distance': 1.0,
+            'second_best_distance': 1.0,
+            'distance_gap': 0.0,
             'time_ms': 0,
             'face_location': None,
             'error': None
@@ -478,19 +492,33 @@ class FaceRecognitionService:
             # Find best match
             best_match_index = np.argmin(face_distances)
             best_distance = face_distances[best_match_index]
+            sorted_distances = np.sort(face_distances)
+            second_best_distance = float(sorted_distances[1]) if len(sorted_distances) > 1 else 1.0
+            distance_gap = float(second_best_distance - best_distance)
+
+            result['distance'] = float(best_distance)
+            result['second_best_distance'] = second_best_distance
+            result['distance_gap'] = distance_gap
+            result['confidence'] = float(1 - best_distance)
             
-            # Check if match is within tolerance
-            if best_distance <= self.tolerance:
+            # Accept match only if tolerance, confidence, and separation checks all pass
+            is_within_tolerance = best_distance <= self.tolerance
+            is_confident = result['confidence'] >= self.min_match_confidence
+            is_separated = (len(sorted_distances) == 1) or (distance_gap >= self.min_match_gap)
+
+            if is_within_tolerance and is_confident and is_separated:
                 result['success'] = True
                 result['student_id'] = self.known_face_ids[best_match_index]
                 result['student_name'] = self.known_face_names[best_match_index]
                 result['student'] = self.known_students[best_match_index]
-                result['distance'] = float(best_distance)
-                result['confidence'] = float(1 - best_distance)
                 self.successful_recognitions += 1
             else:
-                result['error'] = 'No match found'
-                result['distance'] = float(best_distance)
+                if not is_within_tolerance:
+                    result['error'] = 'No match found'
+                elif not is_confident:
+                    result['error'] = 'Low confidence match'
+                else:
+                    result['error'] = 'Ambiguous match'
             
         except Exception as e:
             result['error'] = str(e)
@@ -505,7 +533,7 @@ class FaceRecognitionService:
         return result
     
     # ═══════════════════════════════════════════════════════════════
-    # SECTION 4: CAMERA OPERATIONS (USB CAMERA ONLY)
+    # SECTION 4: CAMERA OPERATIONS
     # ═══════════════════════════════════════════════════════════════
     
     def _get_safe_camera_index(self, requested_index: int = None) -> int:
@@ -513,7 +541,7 @@ class FaceRecognitionService:
         Get safe camera index
         """
         if requested_index is None:
-            return 0  # ✅ Always use Camera 0
+            return DEFAULT_CAMERA_INDEX
         return requested_index
     
     def capture_from_camera(self, camera_index: int = None, num_frames: int = 1) -> List[np.ndarray]:

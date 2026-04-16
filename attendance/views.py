@@ -1064,7 +1064,7 @@ def generate_report(request):
     student_id = request.POST.get('student', '')
     format_type = request.POST.get('format', 'html')
     
-    records = Attendance.objects.filter(entry_type='success').select_related('student')
+    records = Attendance.objects.select_related('student')
     
     if date_from:
         try:
@@ -1082,19 +1082,60 @@ def generate_report(request):
     
     if student_id:
         records = records.filter(student_id=student_id)
+
+    student_scope = Student.objects.filter(is_active=True)
+    if student_id:
+        student_scope = student_scope.filter(pk=student_id)
     
     records = records.order_by('-timestamp')
-    
-    summary = records.values('student__name', 'student__roll_number').annotate(
-        total_days=Count('timestamp__date', distinct=True)
-    ).order_by('student__name')
-    
+
+    success_records = records.filter(entry_type='success')
+    denied_records = records.filter(entry_type='denied')
+
+    summary = success_records.values('student__name', 'student__roll_number').annotate(
+        total_days=Count('timestamp__date', distinct=True),
+        total_entries=Count('id')
+    ).order_by('-total_days', 'student__name')
+
+    daily_stats = records.values('timestamp__date').annotate(
+        total_entries=Count('id'),
+        success_entries=Count('id', filter=Q(entry_type='success')),
+        denied_entries=Count('id', filter=Q(entry_type='denied')),
+        unique_students=Count('student', distinct=True),
+        success_students=Count('student', filter=Q(entry_type='success'), distinct=True),
+        denied_students=Count('student', filter=Q(entry_type='denied'), distinct=True)
+    ).order_by('timestamp__date')
+
+    summary_list = list(summary)
+    daily_stats_list = list(daily_stats)
+    max_summary_days = max([item['total_days'] for item in summary_list], default=1)
+    max_daily_entries = max([item['total_entries'] for item in daily_stats_list], default=1)
+    max_daily_students = max([item['unique_students'] for item in daily_stats_list], default=1)
+
+    total_records = records.count()
+    total_success = success_records.count()
+    total_denied = denied_records.count()
+    unique_students = records.exclude(student__isnull=True).values('student').distinct().count()
+    total_students = student_scope.count()
+    active_days = success_records.values('timestamp__date').distinct().count()
+    avg_per_day = round((total_success / active_days), 1) if active_days > 0 else 0
+
     context = {
+        'report_type': report_type,
         'records': records[:500],
-        'summary': summary,
+        'summary': summary_list,
+        'daily_stats': daily_stats_list,
+        'max_summary_days': max_summary_days,
+        'max_daily_entries': max_daily_entries,
+        'max_daily_students': max_daily_students,
         'date_from': date_from,
         'date_to': date_to,
-        'total_records': records.count(),
+        'total_records': total_records,
+        'total_success': total_success,
+        'total_denied': total_denied,
+        'unique_students': unique_students,
+        'total_students': total_students,
+        'avg_per_day': avg_per_day,
     }
     
     if format_type == 'excel':

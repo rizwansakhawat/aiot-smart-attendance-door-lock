@@ -4,15 +4,24 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --report-primary: #4361ee;
+        --report-primary-soft: #eef2ff;
+        --report-text: #1a1a2e;
+        --report-muted: #6c757d;
+        --report-border: #e9ecef;
+    }
+
     .report-card {
-        background: white;
+        background: linear-gradient(180deg, #ffffff 0%, #f5f6f7 100%);
         border-radius: 20px;
         padding: 30px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        border: 1px solid #f0f2f8;
     }
     
     .report-card h4 {
-        color: #1a1a2e;
+        color: var(--report-text);
         font-weight: 700;
         margin-bottom: 25px;
         padding-bottom: 15px;
@@ -20,52 +29,79 @@
     }
     
     .report-card h4 i {
-        color: #4361ee;
+        color: var(--report-primary);
         margin-right: 10px;
     }
     
     .report-type-selector {
         display: flex;
+        flex-wrap: wrap;
         gap: 15px;
         margin-bottom: 25px;
     }
     
     .report-type-btn {
         flex: 1;
+        min-width: 180px;
+        position: relative;
         padding: 20px;
-        border: 2px solid #e9ecef;
+        border: 2px solid var(--report-border);
         border-radius: 15px;
         background: white;
         text-align: center;
         cursor: pointer;
-        transition: all 0.3s;
+        transition: all 0.25s ease;
+        user-select: none;
     }
     
     .report-type-btn:hover,
     .report-type-btn.active {
-        border-color: #4361ee;
-        background: rgba(67, 97, 238, 0.05);
+        border-color: var(--report-primary);
+        background: var(--report-primary-soft);
+        transform: translateY(-1px);
     }
     
     .report-type-btn.active {
         box-shadow: 0 5px 20px rgba(67, 97, 238, 0.2);
     }
+
+    .report-type-btn:focus-within {
+        outline: 3px solid rgba(67, 97, 238, 0.25);
+        outline-offset: 2px;
+    }
     
     .report-type-btn i {
         font-size: 2rem;
-        color: #4361ee;
+        color: var(--report-primary);
         margin-bottom: 10px;
     }
     
     .report-type-btn h6 {
         margin-bottom: 5px;
-        color: #1a1a2e;
+        color: var(--report-text);
     }
     
     .report-type-btn p {
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--report-muted);
         margin-bottom: 0;
+    }
+
+    .report-type-btn::after {
+        content: '';
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: transparent;
+        border: 2px solid #d8dee8;
+    }
+
+    .report-type-btn.active::after {
+        background: var(--report-primary);
+        border-color: var(--report-primary);
     }
     
     .form-section {
@@ -73,12 +109,41 @@
         border-radius: 15px;
         padding: 25px;
         margin-bottom: 20px;
+        border: 1px solid #edf0f5;
     }
     
     .form-section h6 {
-        color: #1a1a2e;
+        color: var(--report-text);
         font-weight: 600;
         margin-bottom: 15px;
+    }
+
+    .section-help {
+        font-size: 0.85rem;
+        color: var(--report-muted);
+        margin-top: -6px;
+        margin-bottom: 14px;
+    }
+
+    .student-required-note {
+        display: none;
+    }
+
+    .student-required-note.show {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    @media (max-width: 767px) {
+        .report-card {
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .report-type-btn {
+            min-width: 100%;
+        }
     }
 </style>
 {% endblock %}
@@ -100,6 +165,7 @@
                 <!-- Report Type -->
                 <div class="form-section">
                     <h6><i class="bi bi-collection me-2"></i>Select Report Type</h6>
+                    <p class="section-help">Choose how attendance data should be grouped.</p>
                     <div class="report-type-selector">
                         <label class="report-type-btn active">
                             <input type="radio" name="report_type" value="daily" checked class="d-none">
@@ -125,6 +191,7 @@
                 <!-- Date Range -->
                 <div class="form-section">
                     <h6><i class="bi bi-calendar-range me-2"></i>Date Range</h6>
+                    <p class="section-help">Use a start and end date to limit report results.</p>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">From Date</label>
@@ -138,8 +205,14 @@
                 </div>
                 
                 <!-- Student Filter -->
-                <div class="form-section">
-                    <h6><i class="bi bi-person-check me-2"></i>Student (Optional)</h6>
+                <div class="form-section" id="student-filter-section">
+                    <h6 class="d-flex align-items-center justify-content-between">
+                        <span><i class="bi bi-person-check me-2"></i>Student</span>
+                        <span id="student-required-note" class="badge text-bg-warning student-required-note">
+                            <i class="bi bi-exclamation-triangle"></i>Required for Student Report
+                        </span>
+                    </h6>
+                    <p class="section-help">Optional for Daily/Summary reports.</p>
                     <select name="student" class="form-select">
                         <option value="">All Students</option>
                         {% for student in students %}
@@ -185,23 +258,71 @@
 
 {% block extra_js %}
 <script>
-    // Toggle active class on report type buttons
-    document.querySelectorAll('.report-type-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Find parent section
-            const section = this.closest('.form-section, .report-type-selector');
-            if (section) {
-                section.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('active'));
+    function syncCardState(scopeElement) {
+        if (!scopeElement) return;
+        scopeElement.querySelectorAll('.report-type-btn').forEach((btn) => {
+            const input = btn.querySelector('input[type="radio"]');
+            btn.classList.toggle('active', !!(input && input.checked));
+        });
+    }
+
+    function updateStudentRequirement() {
+        const reportTypeInput = document.querySelector('input[name="report_type"]:checked');
+        const studentSelect = document.querySelector('select[name="student"]');
+        const requiredNote = document.getElementById('student-required-note');
+        const studentSection = document.getElementById('student-filter-section');
+
+        if (!reportTypeInput || !studentSelect || !requiredNote || !studentSection) return;
+
+        const isStudentReport = reportTypeInput.value === 'student';
+        studentSelect.required = isStudentReport;
+        requiredNote.classList.toggle('show', isStudentReport);
+        studentSection.classList.toggle('border-warning', isStudentReport);
+    }
+
+    // Keep visual card state synced for both click and keyboard interactions.
+    document.querySelectorAll('.report-type-btn input[type="radio"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            syncCardState(radio.closest('.report-type-selector') || radio.closest('.form-section'));
+            if (radio.name === 'report_type') {
+                updateStudentRequirement();
             }
-            this.classList.add('active');
         });
     });
-    
-    // Set default dates
+
+    // Set default dates only when fields are empty.
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    document.querySelector('input[name="date_from"]').valueAsDate = firstDay;
-    document.querySelector('input[name="date_to"]').valueAsDate = today;
+
+    const dateFromInput = document.querySelector('input[name="date_from"]');
+    const dateToInput = document.querySelector('input[name="date_to"]');
+    if (dateFromInput && !dateFromInput.value) {
+        dateFromInput.valueAsDate = firstDay;
+    }
+    if (dateToInput && !dateToInput.value) {
+        dateToInput.valueAsDate = today;
+    }
+
+    if (dateFromInput && dateToInput) {
+        const todayString = today.toISOString().split('T')[0];
+        dateFromInput.max = todayString;
+        dateToInput.max = todayString;
+    }
+
+    // Guard against invalid date range before submit.
+    const reportForm = document.querySelector('form[action*="generate_report"]');
+    if (reportForm && dateFromInput && dateToInput) {
+        reportForm.addEventListener('submit', function(event) {
+            if (dateFromInput.value && dateToInput.value && dateFromInput.value > dateToInput.value) {
+                event.preventDefault();
+                alert('From Date cannot be later than To Date.');
+                dateFromInput.focus();
+            }
+        });
+    }
+
+    // Initialize visual and validation state on first load.
+    document.querySelectorAll('.report-type-selector, .form-section').forEach(syncCardState);
+    updateStudentRequirement();
 </script>
 {% endblock %}

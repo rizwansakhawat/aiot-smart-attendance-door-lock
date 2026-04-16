@@ -83,6 +83,32 @@
         width: 60%;
         color: #1a1a2e;
         font-weight: 500;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .info-row::before,
+    .info-row::after,
+    .info-label::before,
+    .info-label::after,
+    .info-value::before,
+    .info-value::after {
+        content: none !important;
+    }
+
+    @media (max-width: 768px) {
+        .info-row {
+            flex-direction: column;
+        }
+
+        .info-label {
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .info-value {
+            width: 100%;
+        }
     }
     
     .status-badge {

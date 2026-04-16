@@ -4,48 +4,377 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --report-primary: #2452e8;
+        --report-secondary: #13b0a5;
+        --report-danger: #df2f54;
+        --report-ink: #16203b;
+        --report-muted: #6b7280;
+        --report-surface: #ffffff;
+        --report-surface-soft: #f5f8ff;
+        --report-border: #e8edf7;
+    }
+
+    .result-wrap {
+        position: relative;
+        isolation: isolate;
+    }
+
+    .result-wrap::before {
+        content: "";
+        position: absolute;
+        inset: -30px -30px auto -30px;
+        height: 260px;
+        background:
+            radial-gradient(circle at 12% 20%, rgba(36, 82, 232, 0.18), transparent 48%),
+            radial-gradient(circle at 88% 10%, rgba(19, 176, 165, 0.16), transparent 42%);
+        z-index: -1;
+        pointer-events: none;
+    }
+
     .report-header {
-        background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
-        border-radius: 15px;
-        padding: 30px;
+        background: linear-gradient(135deg, #2452e8 0%, #1a39bd 58%, #122d9d 100%);
+        border-radius: 20px;
+        padding: 30px 32px;
         color: white;
-        margin-bottom: 30px;
+        margin-bottom: 24px;
+        box-shadow: 0 20px 50px rgba(28, 64, 193, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: revealUp 0.45s ease both;
+    }
+
+    .report-header .subtitle {
+        color: rgba(255, 255, 255, 0.82);
+        margin-bottom: 0;
+    }
+
+    .report-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-weight: 600;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        margin-bottom: 12px;
+    }
+
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .quick-stat {
+        background: var(--report-surface);
+        border: 1px solid var(--report-border);
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 8px 20px rgba(19, 31, 71, 0.06);
+        animation: revealUp 0.45s ease both;
+        overflow: hidden;
+    }
+
+    .quick-stat::before,
+    .quick-stat::after,
+    .stats-card::before,
+    .stats-card::after {
+        content: none !important;
+    }
+
+    .quick-stat .name {
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--report-muted);
+        margin-bottom: 6px;
+    }
+
+    .quick-stat .num {
+        color: var(--report-ink);
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .quick-stat.success .num {
+        color: #138f86;
+    }
+
+    .quick-stat.danger .num {
+        color: var(--report-danger);
     }
     
     .table-card {
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        background: var(--report-surface);
+        border-radius: 18px;
+        border: 1px solid var(--report-border);
+        box-shadow: 0 10px 26px rgba(20, 31, 68, 0.07);
         overflow: hidden;
         margin-bottom: 30px;
+        animation: revealUp 0.48s ease both;
     }
     
     .table-card .card-header {
-        background: white;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
         padding: 20px 25px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--report-border);
+    }
+
+    .table-card .card-header h5 {
+        color: var(--report-ink);
+        font-weight: 700;
     }
     
     .table th {
-        background: #f8f9fa;
+        background: var(--report-surface-soft);
         font-weight: 600;
         font-size: 0.8rem;
         text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #4a5673;
+        border-bottom: 1px solid var(--report-border);
+    }
+
+    .table td {
+        vertical-align: middle;
+        border-color: #eef2fa;
+    }
+
+    .table tbody tr:hover {
+        background: #f9fbff;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .stats-card {
+        background: var(--report-surface);
+        border-radius: 14px;
+        border: 1px solid var(--report-border);
+        box-shadow: 0 8px 20px rgba(20, 31, 68, 0.06);
+        padding: 18px;
+        animation: revealUp 0.42s ease both;
+    }
+
+    .stats-card .label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: var(--report-muted);
+        margin-bottom: 8px;
+    }
+
+    .stats-card .value {
+        font-size: 1.7rem;
+        font-weight: 700;
+        color: var(--report-ink);
+        line-height: 1.1;
+    }
+
+    .chart-card {
+        background: var(--report-surface);
+        border: 1px solid var(--report-border);
+        border-radius: 16px;
+        box-shadow: 0 8px 20px rgba(20, 31, 68, 0.06);
+        padding: 20px;
+        margin-bottom: 20px;
+        animation: revealUp 0.46s ease both;
+    }
+
+    .chart-card h5 {
+        color: var(--report-ink);
+        font-weight: 700;
+    }
+
+    .bar-row {
+        margin-bottom: 12px;
+    }
+
+    .bar-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        margin-bottom: 5px;
+        color: #495057;
+    }
+
+    .bar-track {
+        height: 12px;
+        background: #e8edf7;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .bar-track + .bar-track {
+        margin-top: 6px;
+    }
+
+    .bar-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #2452e8, #122d9d);
+        border-radius: 999px;
+    }
+
+    .bar-fill.success {
+        background: linear-gradient(135deg, #18b7ac, #0d8f87);
+    }
+
+    .bar-fill.danger {
+        background: linear-gradient(135deg, #e84a67, #c92449);
+    }
+
+    .trend-meta {
+        font-size: 0.76rem;
+        color: var(--report-muted);
+        margin-bottom: 10px;
+    }
+
+    .trend-legend {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        font-size: 0.78rem;
+        color: var(--report-muted);
+    }
+
+    .trend-legend .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        display: inline-block;
+        margin-right: 6px;
+    }
+
+    .trend-legend .dot.success {
+        background: #0d8f87;
+    }
+
+    .trend-legend .dot.denied {
+        background: #c92449;
+    }
+
+    .trend-legend .dot.volume {
+        background: #2452e8;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-weight: 600;
+        font-size: 0.78rem;
+    }
+
+    .status-pill.success {
+        background: rgba(19, 176, 165, 0.14);
+        color: #0d7f77;
+    }
+
+    .status-pill.denied {
+        background: rgba(223, 47, 84, 0.12);
+        color: #bb2345;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 36px 16px;
+        color: var(--report-muted);
+    }
+
+    .empty-state i {
+        font-size: 2rem;
+        color: #8fa0c2;
+        display: block;
+        margin-bottom: 10px;
+    }
+
+    .content-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+    .content-stagger > *:nth-child(2) { animation-delay: 0.1s; }
+    .content-stagger > *:nth-child(3) { animation-delay: 0.16s; }
+    .content-stagger > *:nth-child(4) { animation-delay: 0.22s; }
+
+    @keyframes revealUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @media (max-width: 992px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .report-header {
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .quick-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .table-card .card-header {
+            padding: 16px;
+        }
     }
     
     @media print {
         .no-print { display: none !important; }
-        .table-card { box-shadow: none; }
+        .table-card,
+        .stats-card,
+        .quick-stat,
+        .chart-card,
+        .report-header {
+            box-shadow: none !important;
+            border: 1px solid #ddd;
+        }
+
+        .result-wrap::before {
+            display: none;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="result-wrap content-stagger">
 <div class="no-print">
     <div class="page-header d-flex justify-content-between align-items-center">
         <div>
             <h1><i class="bi bi-file-earmark-bar-graph"></i> Report Results</h1>
-            <p>{{ date_from }} to {{ date_to }}</p>
+            <p>
+                {{ date_from }} to {{ date_to }}
+                {% if report_type == 'summary' %}
+                    | Summary Statistics View
+                {% elif report_type == 'student' %}
+                    | Student Report View
+                {% else %}
+                    | Daily Report View
+                {% endif %}
+            </p>
         </div>
         <div class="d-flex gap-2">
             <button onclick="window.print()" class="btn btn-outline-primary">
@@ -62,8 +391,17 @@
 <div class="report-header">
     <div class="row align-items-center">
         <div class="col-md-8">
+            <span class="report-pill">
+                {% if report_type == 'summary' %}
+                <i class="bi bi-pie-chart-fill"></i> Summary Report
+                {% elif report_type == 'student' %}
+                <i class="bi bi-person-lines-fill"></i> Student Report
+                {% else %}
+                <i class="bi bi-calendar-week-fill"></i> Daily Report
+                {% endif %}
+            </span>
             <h3><i class="bi bi-building me-2"></i>Smart Attendance System</h3>
-            <p class="mb-0">Attendance Report: {{ date_from }} - {{ date_to }}</p>
+            <p class="subtitle">Attendance Report: {{ date_from }} - {{ date_to }}</p>
         </div>
         <div class="col-md-4 text-md-end">
             <div class="fs-2 fw-bold">{{ total_records }}</div>
@@ -71,6 +409,99 @@
         </div>
     </div>
 </div>
+
+<div class="quick-stats">
+    <div class="quick-stat">
+        <div class="name">Total Events</div>
+        <div class="num">{{ total_records }}</div>
+    </div>
+    <div class="quick-stat success">
+        <div class="name">Allowed Access</div>
+        <div class="num">{{ total_success }}</div>
+    </div>
+    <div class="quick-stat danger">
+        <div class="name">Denied Access</div>
+        <div class="num">{{ total_denied }}</div>
+    </div>
+    <div class="quick-stat">
+        <div class="name">Unique Students</div>
+        <div class="num">{{ unique_students }}</div>
+    </div>
+    {% if report_type == 'summary' %}
+    <div class="quick-stat">
+        <div class="name">Average / Day</div>
+        <div class="num">{{ avg_per_day }}</div>
+    </div>
+    {% endif %}
+</div>
+
+{% if report_type == 'summary' %}
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h5 class="mb-3"><i class="bi bi-people-fill me-2"></i>Top Students by Attendance Days</h5>
+            {% if summary %}
+                {% for item in summary|slice:":10" %}
+                <div class="bar-row">
+                    <div class="bar-label">
+                        <span>{{ item.student__name|default:"Unknown" }}</span>
+                        <span>{{ item.total_days }} day{{ item.total_days|pluralize }}</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {% widthratio item.total_days max_summary_days 100 %}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-inboxes"></i>
+                    <div>No summary data available for this date range.</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h5 class="mb-3"><i class="bi bi-calendar-week me-2"></i>Daily Activity Trend</h5>
+            <div class="trend-meta">Last 10 active days by students marked attendance (present out of total students in scope) and status split.</div>
+            <div class="trend-legend">
+                <span><span class="dot volume"></span>Students marked</span>
+                <span><span class="dot success"></span>Allowed students</span>
+                <span><span class="dot denied"></span>Denied students</span>
+            </div>
+            {% if daily_stats %}
+                {% for item in daily_stats|slice:"-10:" %}
+                <div class="bar-row">
+                    <div class="bar-label">
+                        <span>{{ item.timestamp__date|date:"M d" }}</span>
+                        <span>Present: {{ item.unique_students }} / {{ total_students }} ({% widthratio item.unique_students total_students 100 %}%) | Allowed: {{ item.success_students }} | Denied: {{ item.denied_students }}</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {% widthratio item.unique_students total_students 100 %}%;"></div>
+                    </div>
+                    {% if item.success_students %}
+                    <div class="bar-track">
+                        <div class="bar-fill success" style="width: {% widthratio item.success_students total_students 100 %}%;"></div>
+                    </div>
+                    {% endif %}
+                    {% if item.denied_students %}
+                    <div class="bar-track">
+                        <div class="bar-fill danger" style="width: {% widthratio item.denied_students total_students 100 %}%;"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-calendar-x"></i>
+                    <div>No daily trend data available for this period.</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Summary -->
 {% if summary %}
@@ -84,6 +515,7 @@
                 <tr>
                     <th>Student Name</th>
                     <th>Roll Number</th>
+                    <th>Total Entries</th>
                     <th>Days Present</th>
                 </tr>
             </thead>
@@ -92,6 +524,7 @@
                 <tr>
                     <td><strong>{{ item.student__name }}</strong></td>
                     <td>{{ item.student__roll_number }}</td>
+                    <td>{{ item.total_entries }}</td>
                     <td><span class="badge bg-success">{{ item.total_days }} days</span></td>
                 </tr>
                 {% endfor %}
@@ -102,6 +535,7 @@
 {% endif %}
 
 <!-- Detailed Records -->
+{% if report_type != 'summary' %}
 <div class="table-card">
     <div class="card-header">
         <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Detailed Records</h5>
@@ -115,6 +549,7 @@
                     <th>Roll Number</th>
                     <th>Date</th>
                     <th>Time</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -125,14 +560,28 @@
                     <td>{{ record.student.roll_number|default:"-" }}</td>
                     <td>{{ record.timestamp|date:"Y-m-d" }}</td>
                     <td>{{ record.timestamp|time:"H:i:s" }}</td>
+                    <td>
+                        {% if record.entry_type == 'success' %}
+                        <span class="status-pill success"><i class="bi bi-check-circle-fill"></i>Allowed</span>
+                        {% else %}
+                        <span class="status-pill denied"><i class="bi bi-x-octagon-fill"></i>Denied</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-4">No records found</td>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <div class="empty-state py-2">
+                            <i class="bi bi-search"></i>
+                            <div>No records found for the selected filters.</div>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+</div>
+{% endif %}
 </div>
 {% endblock %}

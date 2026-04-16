@@ -187,7 +187,7 @@ CELERY_NOTIFICATIONS_ENABLED = env.bool('CELERY_NOTIFICATIONS_ENABLED', default=
 # Enable/Disable notifications
 NOTIFICATIONS_ENABLED = True
 EMAIL_NOTIFICATIONS = True
-TELEGRAM_NOTIFICATIONS = False  # Set to True when VPN is on
+TELEGRAM_NOTIFICATIONS = True  # Set to True when VPN is on
 
 # ═══════════════════════════════════════════════════════════════════
 # TELEGRAM CONFIGURATION

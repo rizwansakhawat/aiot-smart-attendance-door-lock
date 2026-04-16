@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Attendance Records - Smart Attendance System{% endblock %}
+{% block title %}
+{% if is_admin %}
+Attendance Records - Smart Attendance System
+{% else %}
+My Attendance - Smart Attendance System
+{% endif %}
+{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -147,8 +153,13 @@
 
 {% block content %}
 <div class="page-header">
+    {% if is_admin %}
     <h1><i class="bi bi-calendar-check-fill"></i> Attendance Records</h1>
     <p>View and filter all attendance entries</p>
+    {% else %}
+    <h1><i class="bi bi-person-check-fill"></i> My Attendance</h1>
+    <p>Simple view of your own attendance records</p>
+    {% endif %}
 </div>
 
 <!-- Stats Bar -->
@@ -159,7 +170,7 @@
         </div>
         <div>
             <div class="number">{{ total_records }}</div>
-            <div class="label">Total Records</div>
+            <div class="label">{% if is_admin %}Total Records{% else %}My Records{% endif %}</div>
         </div>
     </div>
 </div>
@@ -175,6 +186,7 @@
             <label class="form-label">To Date</label>
             <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
         </div>
+        {% if is_admin %}
         <div class="col-md-3">
             <label class="form-label">Student</label>
             <select name="student" class="form-select">
@@ -204,6 +216,26 @@
                 <i class="bi bi-x-lg"></i>
             </a>
         </div>
+        {% else %}
+        <div class="col-md-3">
+            <label class="form-label">Status</label>
+            <select name="entry_type" class="form-select">
+                <option value="">All Status</option>
+                <option value="success" {% if selected_entry_type == 'success' %}selected{% endif %}>Success</option>
+                <option value="denied" {% if selected_entry_type == 'denied' %}selected{% endif %}>Denied</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-search me-2"></i>Filter
+            </button>
+        </div>
+        <div class="col-md-2">
+            <a href="{% url 'attendance_list' %}" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-x-lg me-1"></i>Reset
+            </a>
+        </div>
+        {% endif %}
     </form>
 </div>
 
@@ -219,8 +251,10 @@
         <table class="table">
             <thead>
                 <tr>
+                    {% if is_admin %}
                     <th>Student</th>
                     <th>Roll Number</th>
+                    {% endif %}
                     <th>Date</th>
                     <th>Time</th>
                     <th>Status</th>
@@ -230,6 +264,7 @@
             <tbody>
                 {% for record in records %}
                 <tr>
+                    {% if is_admin %}
                     <td>
                         <div class="d-flex align-items-center">
                             <div class="avatar-sm me-3">
@@ -251,6 +286,7 @@
                         </div>
                     </td>
                     <td>{{ record.student.roll_number|default:"-" }}</td>
+                    {% endif %}
                     <td>{{ record.timestamp|date:"M d, Y" }}</td>
                     <td>{{ record.timestamp|time:"H:i:s" }}</td>
                     <td>

@@ -10,6 +10,7 @@ import sys
 import time
 import cv2
 import numpy as np
+import face_recognition
 from datetime import datetime
 
 # ═══════════════════════════════════════════════════════════════════
@@ -60,6 +61,12 @@ REQUIRED_CONFIRM_FRAMES = int(getattr(settings, 'FACE_RECOGNITION_CONFIRM_FRAMES
 CONFIRM_WINDOW_SECONDS = float(getattr(settings, 'FACE_RECOGNITION_CONFIRM_WINDOW_SECONDS', 1.5))
 RECOGNITION_ATTEMPTS = 3
 CAPTURE_DELAY = 0.5
+CAMERA_WIDTH = int(getattr(settings, 'CAMERA_WIDTH', 640))
+CAMERA_HEIGHT = int(getattr(settings, 'CAMERA_HEIGHT', 480))
+CAMERA_FPS = int(getattr(settings, 'CAMERA_FPS', 30))
+CAMERA_BUFFER_SIZE = int(getattr(settings, 'CAMERA_BUFFER_SIZE', 1))
+CAMERA_DROP_FRAMES = int(getattr(settings, 'CAMERA_DROP_FRAMES', 1))
+CAMERA_WARMUP_FRAMES = int(getattr(settings, 'CAMERA_WARMUP_FRAMES', 6))
 
 # Connection settings
 CONNECTION_CHECK_INTERVAL = 3  # Check every 3 seconds
@@ -226,11 +233,27 @@ class ConnectionManager:
                     pass
             
             # Open new connection
-            self.camera = cv2.VideoCapture(index)
+            if os.name == 'nt':
+                self.camera = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+                if not self.camera.isOpened():
+                    self.camera.release()
+                    self.camera = cv2.VideoCapture(index)
+            else:
+                self.camera = cv2.VideoCapture(index)
             
             if not self.camera.isOpened():
                 self.camera_ok = False
                 return False, "Camera cannot be opened"
+
+            # Tune capture settings for lower latency and smoother preview.
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+            self.camera.set(cv2.CAP_PROP_FPS, CAMERA_FPS)
+            self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+            self.camera.set(cv2.CAP_PROP_BUFFERSIZE, CAMERA_BUFFER_SIZE)
+
+            for _ in range(max(0, CAMERA_WARMUP_FRAMES)):
+                self.camera.grab()
             
             # Test capture
             ret, frame = self.camera.read()
@@ -239,8 +262,9 @@ class ConnectionManager:
                 return False, "Camera opened but cannot capture"
             
             h, w = frame.shape[:2]
+            current_fps = self.camera.get(cv2.CAP_PROP_FPS)
             self.camera_ok = True
-            return True, f"Camera ready ({w}x{h})"
+            return True, f"Camera ready ({w}x{h} @ {current_fps:.0f} FPS)"
             
         except Exception as e:
             self.camera_ok = False
@@ -257,8 +281,8 @@ class ConnectionManager:
                 self.camera_ok = False
                 return False
             
-            ret, frame = self.camera.read()
-            self.camera_ok = (ret and frame is not None)
+            # Use grab() for a lightweight health check without decoding a full frame.
+            self.camera_ok = self.camera.grab()
             return self.camera_ok
         except:
             self.camera_ok = False
@@ -270,7 +294,19 @@ class ConnectionManager:
             return None
         
         try:
-            ret, frame = self.camera.read()
+            # Grab/retrieve and drop stale buffered frames to keep preview real-time.
+            if not self.camera.grab():
+                self.camera_ok = False
+                return None
+
+            for _ in range(max(0, CAMERA_DROP_FRAMES)):
+                if not self.camera.grab():
+                    break
+
+            ret, frame = self.camera.retrieve()
+            if not ret or frame is None:
+                ret, frame = self.camera.read()
+
             if ret and frame is not None:
                 return frame
             else:
@@ -804,7 +840,7 @@ class DoorSystemSimulation(DoorSystem):
                     continue
                 
                 # Prepare display
-                frame = cv2.flip(frame, 1)
+                frame = cv2.flip(frame, 1)  # Mirror image
                 display = frame.copy()
                 
                 # Header
@@ -1056,6 +1092,10 @@ def live_camera_attendance():
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds (faster for multi)
     ATTENDANCE_COOLDOWN = 30        # 30 seconds before same person can mark again
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence for attendance
+    DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
+    DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
+    FALLBACK_DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_FALLBACK_SCALE', 0.8))
+    FALLBACK_DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_FALLBACK_UPSAMPLE', 1))
     
     # Track recent attendance to prevent duplicates
     recent_attendance = {}  # {student_id: last_time}
@@ -1190,14 +1230,31 @@ def live_camera_attendance():
                     # Convert to RGB
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     
-                    # Import face_recognition for multi-face detection
-                    import face_recognition
-                    
-                    # Resize for faster processing
-                    small_frame = cv2.resize(rgb_frame, (0, 0), fx=0.5, fy=0.5)
-                    
-                    # Detect ALL faces
-                    face_locations = face_recognition.face_locations(small_frame, model='hog')
+                    # Fast pass first, then fallback pass for reliability if no faces are found.
+                    small_frame = cv2.resize(rgb_frame, (0, 0), fx=DETECTION_SCALE, fy=DETECTION_SCALE)
+                    scale_back = 1.0 / DETECTION_SCALE
+
+                    face_locations = face_recognition.face_locations(
+                        small_frame,
+                        model='hog',
+                        number_of_times_to_upsample=DETECTION_UPSAMPLE
+                    )
+
+                    if not face_locations:
+                        fallback_frame = cv2.resize(
+                            rgb_frame,
+                            (0, 0),
+                            fx=FALLBACK_DETECTION_SCALE,
+                            fy=FALLBACK_DETECTION_SCALE
+                        )
+                        face_locations = face_recognition.face_locations(
+                            fallback_frame,
+                            model='hog',
+                            number_of_times_to_upsample=FALLBACK_DETECTION_UPSAMPLE
+                        )
+                        if face_locations:
+                            small_frame = fallback_frame
+                            scale_back = 1.0 / FALLBACK_DETECTION_SCALE
                     
                     if face_locations:
                         # Generate encodings for all faces
@@ -1205,11 +1262,11 @@ def live_camera_attendance():
                         
                         # Process each face
                         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
-                            # Scale back up (we resized by 0.5)
-                            top *= 2
-                            right *= 2
-                            bottom *= 2
-                            left *= 2
+                            # Scale back to original resolution.
+                            top = int(top * scale_back)
+                            right = int(right * scale_back)
+                            bottom = int(bottom * scale_back)
+                            left = int(left * scale_back)
                             
                             # Default values
                             name = "Unknown"
@@ -1459,6 +1516,10 @@ def live_camera_door_lock():
     UNLOCK_DURATION = 5             # Keep door unlocked for 5 seconds
     PERSON_COOLDOWN = 10            # Wait 10 seconds before unlocking for same person again
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
+    DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
+    DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
+    FALLBACK_DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_FALLBACK_SCALE', 0.8))
+    FALLBACK_DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_FALLBACK_UPSAMPLE', 1))
     
     # Track recent unlocks to prevent repeated unlocking
     recent_unlocks = {}  # {student_id: last_unlock_time}
@@ -1625,20 +1686,40 @@ def live_camera_door_lock():
                 
                 try:
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    import face_recognition
                     
-                    small_frame = cv2.resize(rgb_frame, (0, 0), fx=0.5, fy=0.5)
-                    face_locations = face_recognition.face_locations(small_frame, model='hog')
+                    small_frame = cv2.resize(rgb_frame, (0, 0), fx=DETECTION_SCALE, fy=DETECTION_SCALE)
+                    scale_back = 1.0 / DETECTION_SCALE
+                    face_locations = face_recognition.face_locations(
+                        small_frame,
+                        model='hog',
+                        number_of_times_to_upsample=DETECTION_UPSAMPLE
+                    )
+
+                    if not face_locations:
+                        fallback_frame = cv2.resize(
+                            rgb_frame,
+                            (0, 0),
+                            fx=FALLBACK_DETECTION_SCALE,
+                            fy=FALLBACK_DETECTION_SCALE
+                        )
+                        face_locations = face_recognition.face_locations(
+                            fallback_frame,
+                            model='hog',
+                            number_of_times_to_upsample=FALLBACK_DETECTION_UPSAMPLE
+                        )
+                        if face_locations:
+                            small_frame = fallback_frame
+                            scale_back = 1.0 / FALLBACK_DETECTION_SCALE
                     
                     if face_locations:
                         face_encodings = face_recognition.face_encodings(small_frame, face_locations)
                         
                         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
                             # Scale back up
-                            top *= 2
-                            right *= 2
-                            bottom *= 2
-                            left *= 2
+                            top = int(top * scale_back)
+                            right = int(right * scale_back)
+                            bottom = int(bottom * scale_back)
+                            left = int(left * scale_back)
                             
                             name = "Unknown"
                             color = (0, 0, 255)  # Red

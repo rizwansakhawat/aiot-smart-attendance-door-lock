@@ -711,6 +711,7 @@
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
         const hamburgerIcon = document.getElementById('hamburger-icon');
+        const alert = document.querySelector('.alert');
         
         function toggleSidebar() {
             sidebar.classList.toggle('active');
@@ -732,6 +733,13 @@
             hamburgerIcon.classList.remove('bi-x-lg');
             hamburgerIcon.classList.add('bi-list');
         }
+
+        setTimeout(() => {
+            if (alert) {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 500);
+            }
+        }, 3000);
         
         // Close sidebar when clicking on a menu link (mobile)
         document.querySelectorAll('.sidebar-menu a').forEach(link => {

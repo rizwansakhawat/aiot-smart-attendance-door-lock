@@ -242,15 +242,23 @@ class EmailNotificationService:
             """
             
             plain_message = strip_tags(html_message)
-            
-            send_mail(
+
+            email = EmailMultiAlternatives(
                 subject=subject,
-                message=plain_message,
+                body=plain_message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[admin_email],
-                html_message=html_message,
-                fail_silently=False
+                to=[admin_email],
             )
+            email.attach_alternative(html_message, "text/html")
+
+            if image_path and os.path.exists(image_path):
+                try:
+                    email.attach_file(image_path)
+                    print(f"   📎 Alert image attached: {os.path.basename(image_path)}")
+                except Exception as attach_error:
+                    print(f"   ⚠️ Could not attach alert image: {attach_error}")
+
+            email.send(fail_silently=False)
             
             print(f"   📧 Alert sent to admin")
             return True

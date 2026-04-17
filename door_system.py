@@ -72,6 +72,11 @@ CAMERA_WARMUP_FRAMES = int(getattr(settings, 'CAMERA_WARMUP_FRAMES', 6))
 CONNECTION_CHECK_INTERVAL = 3  # Check every 3 seconds
 MAX_RECONNECT_ATTEMPTS = 3
 RECONNECT_WAIT_TIME = 2  # Wait 2 seconds between attempts
+FULL_MODE_RECOGNITION_INTERVAL = float(getattr(settings, 'FULL_MODE_RECOGNITION_INTERVAL', 0.4))
+FULL_MODE_MOTION_TIMEOUT_SECONDS = float(getattr(settings, 'FULL_MODE_MOTION_TIMEOUT_SECONDS', 10))
+FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOLDOWN_SECONDS', 60))
+LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 8))
+LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 60))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -138,6 +143,39 @@ def save_attendance(student, entry_type='success', location='Main Door'):
     except Exception as e:
         log_system('error', f"Attendance error: {e}")
         return False
+
+
+def save_unknown_snapshot(frame, prefix='unknown'):
+    """Save a frame for unknown-person alerts and return file path."""
+    if frame is None:
+        return None
+
+    try:
+        denied_dir = os.path.join(PROJECT_DIR, 'media', 'denied')
+        os.makedirs(denied_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = os.path.join(denied_dir, f"{prefix}_{ts}.jpg")
+        if cv2.imwrite(filepath, frame):
+            return filepath
+    except Exception as e:
+        print(f"   ⚠️ Failed to save unknown snapshot: {e}")
+
+    return None
+
+
+def notify_unknown_alert(frame=None, reason='Unknown person detected'):
+    """Log and send unknown-person alert notification with optional snapshot."""
+    snapshot_path = save_unknown_snapshot(frame, prefix='unknown_live')
+    log_system('warning', reason)
+
+    if NOTIFICATIONS_AVAILABLE:
+        try:
+            NotificationService.notify_unknown_person(snapshot_path)
+            return True
+        except Exception as e:
+            print(f"   ⚠️ Unknown alert notification failed: {e}")
+
+    return False
 
 # def save_attendance(student, entry_type='success'):
 #     """Save attendance record"""
@@ -447,6 +485,7 @@ class DoorSystem:
         self.require_arduino = require_arduino
         self.last_check_time = 0
         self.paused = False  # Pause when connection lost
+        self.last_motion_alert_time = 0
     
     def initialize(self):
         """Initialize all components"""
@@ -571,6 +610,218 @@ class DoorSystem:
         except Exception as e:
             print(f"   ❌ Recognition error: {e}")
             return None, 0
+
+    def _save_motion_alert_snapshot(self, frame):
+        """Save a snapshot for admin alerts and return the file path."""
+        if frame is None:
+            return None
+
+        try:
+            denied_dir = os.path.join(PROJECT_DIR, 'media', 'denied')
+            os.makedirs(denied_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(denied_dir, f"motion_alert_{ts}.jpg")
+            if cv2.imwrite(filepath, frame):
+                return filepath
+        except Exception as e:
+            print(f"   ⚠️ Failed to save alert snapshot: {e}")
+
+        return None
+
+    def _send_motion_timeout_alert(self, frame, timeout_seconds):
+        """Notify admin when motion was detected but no known face matched."""
+        filepath = self._save_motion_alert_snapshot(frame)
+        message = (
+            f"PIR motion detected but no known face was recognized within "
+            f"{timeout_seconds:.0f} seconds."
+        )
+
+        print_error_box("NO KNOWN FACE DETECTED", message)
+        log_system('warning', message)
+
+        if NOTIFICATIONS_AVAILABLE:
+            try:
+                NotificationService.notify_unknown_person(filepath)
+            except Exception as e:
+                print(f"   ⚠️ Admin alert failed: {e}")
+
+        if self.require_arduino:
+            self.conn.send_command("DENIED")
+
+    def run_full_mode_live(self):
+        """Full mode with live camera preview, PIR-triggered recognition, and admin alerts."""
+        if not self.initialize():
+            print("\n❌ Cannot start - initialization failed!")
+            return
+
+        self.running = True
+        self.last_check_time = time.time()
+        self.last_motion_alert_time = 0
+
+        print("\n" + "═" * 58)
+        print("  🎥 FULL MODE - LIVE CAMERA + PIR")
+        print("═" * 58)
+        print(f"  • Motion timeout: {FULL_MODE_MOTION_TIMEOUT_SECONDS:.0f} seconds")
+        print("  • Known face = gate unlocks")
+        print("  • No known face = admin alert after timeout")
+        print("═" * 58 + "\n")
+
+        cv2.namedWindow('Full Mode', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Full Mode', 1000, 750)
+
+        motion_active = False
+        motion_deadline = 0
+        recognition_votes = {}
+        last_recognition_time = 0
+        last_result_text = "Waiting for motion..."
+        last_result_color = (180, 180, 180)
+        result_time = 0
+        status_messages = []
+        status_time = 0
+
+        try:
+            while self.running:
+                current_time = time.time()
+
+                # Keep hardware connection checks active while the camera is live.
+                if current_time - self.last_check_time >= CONNECTION_CHECK_INTERVAL:
+                    errors = self.check_connections()
+
+                    if errors:
+                        self.paused = True
+
+                        for device in errors:
+                            print_error_box(f"{device} DISCONNECTED", f"{device} connection lost!\n\nAttempting to reconnect...")
+                            log_system('error', f'{device} disconnected')
+
+                            if not self.attempt_reconnect(device):
+                                print_error_box("RECONNECTION FAILED", f"Cannot reconnect {device}.\n\nPlease check the connection and restart.")
+                                self.running = False
+                                break
+
+                        if self.running:
+                            self.paused = False
+                            print("\n🎯 System resumed. Waiting for motion...\n")
+
+                    self.last_check_time = current_time
+
+                if self.paused:
+                    time.sleep(0.1)
+                    continue
+
+                if self.require_arduino:
+                    msg = self.conn.read_arduino()
+                    if msg and "MOTION" in msg:
+                        if not motion_active:
+                            recognition_votes = {}
+                            print("\n📡 [ARDUINO] 🚶 PIR Motion Detected!")
+                        motion_active = True
+                        motion_deadline = current_time + FULL_MODE_MOTION_TIMEOUT_SECONDS
+                        status_messages = [f"🚶 Motion detected - scanning for {FULL_MODE_MOTION_TIMEOUT_SECONDS:.0f}s"]
+                        status_time = current_time
+
+                frame = self.conn.capture_frame()
+
+                if frame is None:
+                    error_img = np.zeros((500, 800, 3), dtype=np.uint8)
+                    cv2.putText(error_img, "CAMERA DISCONNECTED",
+                               (200, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
+                    cv2.imshow('Full Mode', error_img)
+                    if cv2.waitKey(500) & 0xFF == ord('q'):
+                        self.running = False
+                    continue
+
+                frame = cv2.flip(frame, 1)
+                display = frame.copy()
+                h, w = display.shape[:2]
+
+                if motion_active and current_time - last_recognition_time >= FULL_MODE_RECOGNITION_INTERVAL:
+                    student, confidence = self.recognize_face(frame)
+
+                    if student:
+                        votes = recognition_votes.get(student.id, 0) + 1
+                        recognition_votes[student.id] = votes
+                        print(f"  ✅ Recognized: {student.name}")
+                        print(f"  📊 Confidence: {confidence:.1%}")
+                        print(f"  🔎 Confirmation: {votes}/{REQUIRED_CONFIRM_FRAMES}")
+
+                        if votes >= REQUIRED_CONFIRM_FRAMES:
+                            print("\n  ╔════════════════════════════════════════════╗")
+                            print(f"  ║  ✅ ACCESS GRANTED: {student.name[:25].ljust(25)}║")
+                            print("  ╚════════════════════════════════════════════╝")
+                            print(f"  📊 Final Confidence: {confidence:.1%}")
+                            print()
+                            print("  ┌──────────────────────────────────────────┐")
+                            print("  │  ➡️  Sending UNLOCK command to Arduino   │")
+                            print("  │  🔓 DOOR UNLOCKED                        │")
+                            print("  └──────────────────────────────────────────┘")
+                            self.conn.send_command("UNLOCK")
+                            save_attendance(student)
+
+                            last_result_text = f"ACCESS GRANTED: {student.name}"
+                            last_result_color = (0, 200, 0)
+                            result_time = current_time
+                            motion_active = False
+                            motion_deadline = 0
+                            recognition_votes = {}
+                            status_messages = [f"✅ ACCESS GRANTED: {student.name}"]
+                            status_time = current_time
+                    else:
+                        print("  ❌ Face not recognized")
+
+                    last_recognition_time = current_time
+
+                if motion_active and current_time >= motion_deadline:
+                    if current_time - self.last_motion_alert_time >= FULL_MODE_ALERT_COOLDOWN_SECONDS:
+                        self._send_motion_timeout_alert(frame, FULL_MODE_MOTION_TIMEOUT_SECONDS)
+                        self.last_motion_alert_time = current_time
+                        last_result_text = "ADMIN ALERT SENT"
+                        last_result_color = (0, 0, 220)
+                        result_time = current_time
+                        status_messages = ["⚠️ No known face detected - admin alerted"]
+                        status_time = current_time
+                    else:
+                        print("   ℹ️ Motion timeout alert skipped because of cooldown")
+
+                    motion_active = False
+                    motion_deadline = 0
+                    recognition_votes = {}
+
+                cv2.rectangle(display, (0, 0), (w, 90), (35, 35, 35), -1)
+                cv2.putText(display, "FULL MODE - LIVE CAMERA + PIR",
+                           (15, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 0), 2)
+
+                mode_text = "Scanning for motion..."
+                if motion_active:
+                    remaining = max(0, int(motion_deadline - current_time))
+                    mode_text = f"Motion active - scanning for known face ({remaining}s left)"
+                cv2.putText(display, mode_text,
+                           (15, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+
+                if last_result_text and (current_time - result_time < 3):
+                    cv2.rectangle(display, (0, h - 55), (w, h), last_result_color, -1)
+                    cv2.putText(display, last_result_text,
+                               (15, h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                elif status_messages and (current_time - status_time < 3):
+                    cv2.rectangle(display, (0, h - 55), (w, h), (50, 50, 50), -1)
+                    cv2.putText(display, status_messages[-1],
+                               (15, h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 1)
+                else:
+                    cv2.rectangle(display, (0, h - 45), (w, h), (50, 50, 50), -1)
+                    cv2.putText(display, "Q = Quit",
+                               (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 150), 1)
+
+                cv2.imshow('Full Mode', display)
+
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or key == ord('Q'):
+                    self.running = False
+
+        except KeyboardInterrupt:
+            print("\n\n🛑 Stopping system...")
+
+        finally:
+            self.cleanup()
     
     def handle_motion(self):
         """Handle motion detection event"""
@@ -774,217 +1025,6 @@ class DoorSystem:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# SIMULATION MODE
-# ═══════════════════════════════════════════════════════════════════
-
-class DoorSystemSimulation(DoorSystem):
-    """Simulation mode - camera required, keyboard trigger"""
-    
-    def __init__(self):
-        super().__init__(require_arduino=False)
-    
-    def run(self):
-        if not self.initialize():
-            return
-        
-        self.running = True
-        self.last_check_time = time.time()
-        
-        print("\n" + "═" * 50)
-        print("  🎮 SIMULATION MODE")
-        print("  ─────────────────────────────────────────")
-        print("  SPACE = Simulate motion")
-        print("  Q     = Quit")
-        print("═" * 50 + "\n")
-        
-        cv2.namedWindow('Door System', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Door System', 800, 600)
-        
-        last_result = ""
-        result_time = 0
-        
-        try:
-            while self.running:
-                current_time = time.time()
-                
-                # Check camera periodically
-                if current_time - self.last_check_time >= CONNECTION_CHECK_INTERVAL:
-                    if not self.conn.check_camera():
-                        print_error_box("CAMERA DISCONNECTED", "Camera connection lost!")
-                        
-                        if not self.attempt_reconnect("CAMERA"):
-                            self.running = False
-                            break
-                        
-                        # Recreate window
-                        cv2.namedWindow('Door System', cv2.WINDOW_NORMAL)
-                        cv2.resizeWindow('Door System', 800, 600)
-                    
-                    self.last_check_time = current_time
-                
-                # Capture frame
-                frame = self.conn.capture_frame()
-                
-                if frame is None:
-                    # Show error screen
-                    error_img = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(error_img, "CAMERA DISCONNECTED", 
-                               (120, 220), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    cv2.putText(error_img, "Attempting to reconnect...", 
-                               (150, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-                    cv2.imshow('Door System', error_img)
-                    
-                    key = cv2.waitKey(500) & 0xFF
-                    if key == ord('q'):
-                        self.running = False
-                    continue
-                
-                # Prepare display
-                frame = cv2.flip(frame, 1)  # Mirror image
-                display = frame.copy()
-                
-                # Header
-                cv2.rectangle(display, (0, 0), (display.shape[1], 70), (40, 40, 40), -1)
-                cv2.putText(display, "Smart Door System - SIMULATION", 
-                           (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(display, "SPACE = Detect  |  Q = Quit", 
-                           (15, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
-                
-                # Status indicator
-                cv2.circle(display, (display.shape[1] - 30, 35), 10, (0, 255, 0), -1)
-                
-                # Show result
-                if last_result and (current_time - result_time < 3):
-                    color = (0, 200, 0) if "GRANTED" in last_result else (0, 0, 200)
-                    cv2.rectangle(display, (0, display.shape[0]-55), (display.shape[1], display.shape[0]), color, -1)
-                    cv2.putText(display, last_result, 
-                               (15, display.shape[0]-18), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                
-                cv2.imshow('Door System', display)
-                
-                key = cv2.waitKey(1) & 0xFF
-                
-                if key == ord(' '):
-                    self.handle_motion()
-                    
-                    # Update display result
-                    try:
-                        last_log = SystemLog.objects.order_by('-timestamp').first()
-                        if last_log and 'granted' in last_log.message.lower():
-                            name = last_log.message.split(': ')[-1]
-                            last_result = f"ACCESS GRANTED: {name}"
-                        else:
-                            last_result = "ACCESS DENIED"
-                    except:
-                        pass
-                    result_time = time.time()
-                    
-                elif key == ord('q'):
-                    self.running = False
-                    
-        except KeyboardInterrupt:
-            pass
-        
-        finally:
-            self.cleanup()
-
-
-# ═══════════════════════════════════════════════════════════════════
-# QUICK TEST
-# ═══════════════════════════════════════════════════════════════════
-
-def quick_test():
-    """Quick face recognition test"""
-    print("\n" + "═" * 50)
-    print("  🧪 QUICK TEST MODE")
-    print("═" * 50 + "\n")
-    
-    conn = ConnectionManager()
-    
-    # Connect camera
-    print("📷 Connecting camera...")
-    ok, msg = conn.connect_camera(CAMERA_INDEX)
-    if not ok:
-        print_error_box("CAMERA ERROR", msg)
-        return
-    print(f"   ✅ {msg}")
-    
-    # Load face recognition
-    print("\n🤖 Loading face recognition...")
-    try:
-        service = FaceRecognitionService(tolerance=RECOGNITION_TOLERANCE, camera_index=CAMERA_INDEX)
-        service.refresh_cache()
-        print("   ✅ Ready")
-    except Exception as e:
-        print_error_box("ERROR", str(e))
-        conn.cleanup()
-        return
-    
-    print("\n" + "═" * 50)
-    print("  SPACE = Recognize  |  Q = Quit")
-    print("═" * 50 + "\n")
-    
-    cv2.namedWindow('Quick Test', cv2.WINDOW_NORMAL)
-    
-    last_result = ""
-    result_time = 0
-    
-    try:
-        while True:
-            frame = conn.capture_frame()
-            
-            if frame is None:
-                error_img = np.zeros((400, 600, 3), dtype=np.uint8)
-                cv2.putText(error_img, "CAMERA ERROR", (180, 200), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                cv2.imshow('Quick Test', error_img)
-                if cv2.waitKey(1000) & 0xFF == ord('q'):
-                    break
-                continue
-            
-            frame = cv2.flip(frame, 1)
-            display = frame.copy()
-            
-            # Header
-            cv2.rectangle(display, (0, 0), (display.shape[1], 45), (40, 40, 40), -1)
-            cv2.putText(display, "SPACE = Recognize | Q = Quit", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
-            
-            # Result
-            if last_result and (time.time() - result_time < 2.5):
-                color = (0, 200, 0) if "✅" in last_result else (0, 0, 200)
-                cv2.rectangle(display, (0, display.shape[0]-50), (display.shape[1], display.shape[0]), color, -1)
-                cv2.putText(display, last_result, (10, display.shape[0]-15), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            cv2.imshow('Quick Test', display)
-            
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord(' '):
-                print("\n📸 Recognizing...")
-                result = service.recognize_face(frame)
-                
-                if result['success']:
-                    name = result['student'].name
-                    conf = result['confidence']
-                    print(f"   ✅ {name} ({conf:.0%})")
-                    last_result = f"✅ {name} ({conf:.0%})"
-                else:
-                    print(f"   ❌ {result.get('error', 'Unknown')}")
-                    last_result = "❌ Not recognized"
-                
-                result_time = time.time()
-                
-            elif key == ord('q'):
-                break
-                
-    finally:
-        conn.cleanup()
-        print("\n👋 Done!")
-
-
-# ═══════════════════════════════════════════════════════════════════
 # LIVE VIEW
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1170,6 +1210,9 @@ def live_camera_attendance():
     session_marked = 0
     session_start = time.time()
     last_connection_check = time.time()
+    unknown_start_time = None
+    last_unknown_alert_time = 0
+    last_unknown_frame = None
     
     # Status messages (shown at bottom)
     status_messages = []
@@ -1225,6 +1268,7 @@ def live_camera_attendance():
             if current_time - last_recognition_time >= RECOGNITION_INTERVAL:
                 detected_faces = []
                 status_messages = []
+                unknown_detected_this_cycle = False
                 
                 try:
                     # Convert to RGB
@@ -1357,9 +1401,35 @@ def live_camera_attendance():
                                 'status': status,
                                 'confidence': confidence
                             })
+
+                            if status == 'unknown':
+                                unknown_detected_this_cycle = True
+                                last_unknown_frame = frame.copy()
+
+                    if unknown_detected_this_cycle:
+                        if unknown_start_time is None:
+                            unknown_start_time = current_time
+
+                        if (
+                            current_time - unknown_start_time >= LIVE_UNKNOWN_ALERT_SECONDS and
+                            current_time - last_unknown_alert_time >= LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS
+                        ):
+                            notify_unknown_alert(
+                                last_unknown_frame,
+                                reason=(
+                                    "Live Attendance: unknown person persisted for "
+                                    f"{LIVE_UNKNOWN_ALERT_SECONDS:.0f}s"
+                                )
+                            )
+                            last_unknown_alert_time = current_time
+                            unknown_start_time = current_time
+                            status_messages.append("⚠️ Unknown person alert sent")
+                    else:
+                        unknown_start_time = None
                     
                     if not face_locations:
                         status_messages = ["📷 No faces detected"]
+                        unknown_start_time = None
                     
                     status_time = current_time
                     
@@ -1606,6 +1676,9 @@ def live_camera_door_lock():
     session_marked = 0
     session_start = time.time()
     last_connection_check = time.time()
+    unknown_start_time = None
+    last_unknown_alert_time = 0
+    last_unknown_frame = None
     
     # Status messages
     status_messages = []
@@ -1683,6 +1756,7 @@ def live_camera_door_lock():
             if current_time - last_recognition_time >= RECOGNITION_INTERVAL:
                 detected_faces = []
                 status_messages = []
+                unknown_detected_this_cycle = False
                 
                 try:
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1815,9 +1889,35 @@ def live_camera_door_lock():
                                 'status': status,
                                 'confidence': confidence
                             })
+
+                            if status == 'unknown':
+                                unknown_detected_this_cycle = True
+                                last_unknown_frame = frame.copy()
+
+                    if unknown_detected_this_cycle:
+                        if unknown_start_time is None:
+                            unknown_start_time = current_time
+
+                        if (
+                            current_time - unknown_start_time >= LIVE_UNKNOWN_ALERT_SECONDS and
+                            current_time - last_unknown_alert_time >= LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS
+                        ):
+                            notify_unknown_alert(
+                                last_unknown_frame,
+                                reason=(
+                                    "Live Door Lock: unknown person persisted for "
+                                    f"{LIVE_UNKNOWN_ALERT_SECONDS:.0f}s"
+                                )
+                            )
+                            last_unknown_alert_time = current_time
+                            unknown_start_time = current_time
+                            status_messages.append("⚠️ Unknown person alert sent")
+                    else:
+                        unknown_start_time = None
                     
                     if not face_locations:
                         status_messages = ["📷 Scanning..."]
+                        unknown_start_time = None
                     
                     status_time = current_time
                     
@@ -1955,27 +2055,17 @@ if __name__ == '__main__':
     print("\n  SELECT MODE:\n")
     print("  ┌─────────────────────────────────────────────────────┐")
     print("  │  1. Full Mode        (Arduino + Camera + PIR)      │")
-    print("  │  2. Simulation       (Camera + Keyboard trigger)   │")
-    print("  │  3. Quick Test       (Single face recognition)     │")
     print("  │  4. Live View        (Continuous recognition)      │")
     print("  │  5. Live Attendance  (Auto attendance - No Arduino)│")
     print("  │  6. Live Door Lock   (Camera + Arduino - No PIR)   │")
     print("  └─────────────────────────────────────────────────────┘")
     print("\n" + "═" * 58)
     
-    choice = input("\n  Enter choice (1-6): ").strip()
+    choice = input("\n  Enter choice (1,4,5,6): ").strip()
     
     if choice == '1':
         print("\n  📌 Full Mode: Arduino + Camera + PIR required")
-        DoorSystem(require_arduino=True).run()
-        
-    elif choice == '2':
-        print("\n  📌 Simulation: Camera required, keyboard trigger")
-        DoorSystemSimulation().run()
-        
-    elif choice == '3':
-        print("\n  📌 Quick Test: Single recognition test")
-        quick_test()
+        DoorSystem(require_arduino=True).run_full_mode_live()
         
     elif choice == '4':
         print("\n  📌 Live View: Continuous face detection")

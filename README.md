@@ -35,7 +35,7 @@ aiot-smart-attendance-door-lock/
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10.11
 - Redis (local or Docker)
 - Windows 10/11 (tested)
 

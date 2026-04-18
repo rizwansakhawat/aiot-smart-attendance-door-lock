@@ -10,6 +10,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('attendance.urls')),
+    path('door-control/', include('door_control.urls')),
 ]
 
 # Serve media files in development

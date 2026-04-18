@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'attendance',
+    'door_control',
 ]
 
 MIDDLEWARE = [

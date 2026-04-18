@@ -1,0 +1,633 @@
+{% extends 'base.html' %}
+
+{% block title %}Door Control - Smart Attendance{% endblock %}
+
+{% block extra_css %}
+<style>
+    .door-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 24px;
+        padding: 20px 24px;
+        color: #fff;
+        background:
+            radial-gradient(circle at top right, rgba(255,255,255,0.08), transparent 24%),
+            radial-gradient(circle at bottom left, rgba(255,255,255,0.06), transparent 20%),
+            linear-gradient(135deg, #14213d 0%, #1e40af 56%, #0f766e 100%);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+        margin-bottom: 28px;
+    }
+
+    .door-hero::after {
+        content: '';
+        position: absolute;
+        inset: auto -70px -90px auto;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.08);
+        filter: blur(2px);
+    }
+
+    .door-hero h1 {
+        margin-bottom: 6px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        font-size: clamp(2rem, 3vw, 3rem);
+    }
+
+    .door-hero p {
+        margin: 0;
+        color: rgba(255,255,255,0.85);
+        max-width: 48ch;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    .status-panel,
+    .action-panel,
+    .preview-panel {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 22px;
+        background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+
+    .status-pill.running {
+        background: rgba(16, 185, 129, 0.14);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .status-pill.stopped {
+        background: rgba(148, 163, 184, 0.16);
+        color: #475569;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+    }
+
+    .mode-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        padding: 18px;
+        min-height: 165px;
+        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    }
+
+    .mode-card::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        background: linear-gradient(180deg, #14b8a6 0%, #2563eb 100%);
+    }
+
+    .mode-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 18px rgba(15, 23, 42, 0.07);
+        border-color: rgba(37, 99, 235, 0.22);
+    }
+
+    .mode-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .mode-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        font-weight: 800;
+        color: #fff;
+        background: linear-gradient(135deg, #3557c8, #149a8a);
+        box-shadow: 0 6px 12px rgba(29, 78, 216, 0.14);
+    }
+
+    .mode-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.15;
+    }
+
+    .mode-desc {
+        color: #64748b;
+        margin: 6px 0 16px;
+        font-size: 0.95rem;
+    }
+
+    .mode-action {
+        border: none;
+        border-radius: 12px;
+        padding: 11px 16px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #17998b, #3b82f6);
+        box-shadow: 0 8px 14px rgba(59, 130, 246, 0.12);
+    }
+
+    .mode-action:hover {
+        filter: brightness(1.01);
+        transform: translateY(-1px);
+    }
+
+    .section-label {
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: #64748b;
+        margin-bottom: 10px;
+    }
+
+    .preview-shell {
+        border-radius: 20px;
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        min-height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .preview-placeholder {
+        color: rgba(255,255,255,0.86);
+    }
+
+    .preview-placeholder i {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: 8px;
+    }
+
+    .preview-image {
+        width: 100%;
+        display: none;
+        max-height: 520px;
+        object-fit: contain;
+        background: #0f172a;
+    }
+
+    .mini-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .mini-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.06);
+        color: #334155;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .process-summary {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        padding: 14px 16px;
+        margin: 14px 0 18px;
+    }
+
+    .process-summary .summary-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        font-size: 0.9rem;
+        color: #334155;
+    }
+
+    .process-summary .summary-line:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .process-summary .summary-label {
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    .process-summary .summary-value {
+        font-weight: 700;
+        text-align: right;
+        word-break: break-word;
+    }
+
+    .stop-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(239, 68, 68, 0.09);
+        color: #b91c1c;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+
+    .log-links {
+        display: grid;
+        gap: 8px;
+        margin-top: 16px;
+    }
+
+    .log-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.04);
+        color: #334155;
+        font-size: 0.86rem;
+    }
+
+    .status-alert {
+        border-radius: 14px;
+        padding: 12px 14px;
+        border: 1px solid transparent;
+        color: #1f2937;
+    }
+
+    .status-alert-running {
+        background: #e7f7ef;
+        border-color: #9ed8ba;
+        color: #0f5132;
+    }
+
+    .status-alert-error {
+        background: #fdecec;
+        border-color: #f3b3b3;
+        color: #9f1239;
+    }
+
+    .status-alert-idle {
+        background: #f2f5f9;
+        border-color: #d6dde8;
+        color: #475569;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="door-hero">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 position-relative" style="z-index: 1;">
+        <div>
+            <div class="section-label text-white-50 mb-2">Access Control</div>
+            <h1 class="display-6"><i class="bi bi-door-open-fill me-2"></i>Door Control Panel</h1>
+            <p>Manage door modes & live preview</p>
+        </div>
+        <div class="mini-meta">
+            <span><i class="bi bi-shield-check"></i>Restricted</span>
+            <span><i class="bi bi-camera-video"></i>Preview</span>
+            <span><i class="bi bi-activity"></i>Device-aware</span>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="status-panel p-4 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="mb-0 fw-bold">System Status</h5>
+                {% if door_system_status.running %}
+                    <span class="status-pill running"><i class="bi bi-broadcast-pin"></i>Running</span>
+                {% elif door_system_status.failed %}
+                    <span class="status-pill" style="background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.28);"><i class="bi bi-exclamation-triangle-fill"></i>Error</span>
+                {% else %}
+                    <span class="status-pill stopped"><i class="bi bi-pause-circle"></i>Stopped</span>
+                {% endif %}
+            </div>
+            {% comment %} {% if door_system_status.running %}
+                <div class="status-alert status-alert-running shadow-sm mb-4" id="running-process-alert">
+                    Mode: {{ door_system_status.mode_label }}<br>
+                    PID: {{ door_system_status.pid }}<br>
+                    Started by: {{ door_system_status.started_by|default:'-' }}
+            {% if door_system_status.failed %}
+                <div class="status-alert status-alert-error shadow-sm mb-4">
+                    <strong>Last start attempt failed</strong><br>
+                    {% if door_system_status.error_mode_label %}
+                        Mode: {{ door_system_status.error_mode_label }}<br>
+                    {% endif %}
+                    {% if door_system_status.error_started_by %}
+                        Started by: {{ door_system_status.error_started_by }}<br>
+                    {% endif %}
+                    {{ door_system_status.error_message }}
+                </div>
+            {% else %}
+                <div class="status-alert status-alert-idle mb-4" id="inactive-process-alert">
+                    No active process detected.
+                </div> 
+            {% endif %} {% endcomment %}
+
+            <h6 class="mb-3 fw-bold">Select an operating mode</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="mode-card h-100">
+                        <div class="mode-head">
+                            <div>
+                                <div class="mode-title">1 - Live View</div>
+                                <div class="mode-desc">Continuous recognition</div>
+                            </div>
+                            <div class="mode-index">1</div>
+                        </div>
+                        <form method="post" action="{% url 'door_control_action' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="start">
+                            <input type="hidden" name="mode" value="1">
+                            <button type="submit" class="btn btn-sm btn-success w-100 mode-action" {% if door_system_status.running %}disabled{% endif %}>
+                                <i class="bi bi-play-fill me-1"></i>Start Live View
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="mode-card h-100">
+                        <div class="mode-head">
+                            <div>
+                                <div class="mode-title">2 - Live Attendance</div>
+                                <div class="mode-desc">No Arduino required</div>
+                            </div>
+                            <div class="mode-index">2</div>
+                        </div>
+                        <form method="post" action="{% url 'door_control_action' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="start">
+                            <input type="hidden" name="mode" value="2">
+                            <button type="submit" class="btn btn-sm btn-success w-100 mode-action" {% if door_system_status.running %}disabled{% endif %}>
+                                <i class="bi bi-play-fill me-1"></i>Start Attendance
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="mode-card h-100">
+                        <div class="mode-head">
+                            <div>
+                                <div class="mode-title">3 - Live Door Lock</div>
+                                <div class="mode-desc">Camera + Arduino, no PIR</div>
+                            </div>
+                            <div class="mode-index">3</div>
+                        </div>
+                        <form method="post" action="{% url 'door_control_action' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="start">
+                            <input type="hidden" name="mode" value="3">
+                            <button type="submit" class="btn btn-sm btn-success w-100 mode-action" {% if door_system_status.running %}disabled{% endif %}>
+                                <i class="bi bi-play-fill me-1"></i>Start Door Lock
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="mode-card h-100">
+                        <div class="mode-head">
+                            <div>
+                                <div class="mode-title">4 - Full Mode</div>
+                                <div class="mode-desc">Arduino + Camera + PIR</div>
+                            </div>
+                            <div class="mode-index">4</div>
+                        </div>
+                        <form method="post" action="{% url 'door_control_action' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="start">
+                            <input type="hidden" name="mode" value="4">
+                            <button type="submit" class="btn btn-sm btn-success w-100 mode-action" {% if door_system_status.running %}disabled{% endif %}>
+                                <i class="bi bi-play-fill me-1"></i>Start Full Mode
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="action-panel p-4 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="mb-0 fw-bold">Stop Process</h5>
+                {% if door_system_status.running %}
+                    <span class="status-pill running"><i class="bi bi-stopwatch"></i>Stop Ready</span>
+                {% elif door_system_status.failed %}
+                    <span class="status-pill" style="background: rgba(239, 68, 68, 0.12); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.28);"><i class="bi bi-exclamation-triangle-fill"></i>Error</span>
+                {% else %}
+                    <span class="status-pill stopped"><i class="bi bi-pause-circle"></i>Idle</span>
+                {% endif %}
+            </div>
+
+            {% if door_system_status.running %}
+                <div class="stop-note"><i class="bi bi-exclamation-triangle-fill"></i>Active process detected</div>
+
+                <div class="process-summary">
+                    <div class="summary-line">
+                        <span class="summary-label">Current mode</span>
+                        <span class="summary-value">{{ door_system_status.mode_label }}</span>
+                    </div>
+                    <div class="summary-line">
+                        <span class="summary-label">Process ID</span>
+                        <span class="summary-value">{{ door_system_status.pid }}</span>
+                    </div>
+                    <div class="summary-line">
+                        <span class="summary-label">Started by</span>
+                        <span class="summary-value">{{ door_system_status.started_by|default:'-' }}</span>
+                    </div>
+                </div>
+
+                <form method="post" action="{% url 'door_control_action' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="stop">
+                    <button type="submit" class="btn btn-danger mode-action" style="background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 18px rgba(239, 68, 68, 0.16); width: 100%;">
+                        <i class="bi bi-stop-fill me-1"></i>Stop Door System
+                    </button>
+                </form>
+
+                <div class="log-links">
+                    <div class="log-link"><span><i class="bi bi-journal-text me-2"></i>Log file</span><span>media/runtime/door_system.log</span></div>
+                    <div class="log-link"><span><i class="bi bi-file-earmark-binary me-2"></i>State file</span><span>media/runtime/door_system_state.json</span></div>
+                </div>
+            {% elif door_system_status.failed %}
+                <div class="stop-note" style="background: rgba(239, 68, 68, 0.12); color: #b91c1c;"><i class="bi bi-exclamation-triangle-fill"></i>Last start attempt failed</div>
+
+                <div class="process-summary" style="border-color: rgba(239, 68, 68, 0.18);">
+                    <div class="summary-line">
+                        <span class="summary-label">Failed mode</span>
+                        <span class="summary-value">{{ door_system_status.error_mode_label|default:'-' }}</span>
+                    </div>
+                    <div class="summary-line">
+                        <span class="summary-label">Started by</span>
+                        <span class="summary-value">{{ door_system_status.error_started_by|default:'-' }}</span>
+                    </div>
+                    <div class="summary-line">
+                        <span class="summary-label">Error</span>
+                        <span class="summary-value">{{ door_system_status.error_message }}</span>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border mb-0 shadow-sm">
+                    The panel stays visible even after a failed start so you can see the error and check the log.
+                </div>
+            {% else %}
+                {% comment %} <div class="alert alert-light border mb-0 shadow-sm">
+                    <strong>System not running</strong><br>
+                    Stop control appears only when a mode is active.
+                </div> {% endcomment %}
+
+                <div class="process-summary">
+                    <div class="summary-line">
+                        <span class="summary-label">What this panel does</span>
+                        <span class="summary-value">Stops the active process</span>
+                    </div>
+                    <div class="summary-line">
+                        <span class="summary-label">Available when</span>
+                        <span class="summary-value">A mode is running</span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="preview-panel p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="section-label">Camera Feed</div>
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-camera-video-fill me-2"></i>Live Camera Feed</h5>
+                </div>
+                <button type="button" class="btn btn-sm btn-success mode-action" id="preview-toggle-btn" onclick="togglePreview()">
+                    <i class="bi bi-play-fill me-1"></i>Run Preview
+                </button>
+            </div>
+            <p class="text-muted mb-3">
+                Camera preview is disabled by default. Press Run Preview to open it inside the UI, and press Stop Preview to close it.
+            </p>
+            <div class="mb-2">
+                <span id="preview-status-badge" class="badge bg-secondary">Preview Stopped</span>
+            </div>
+            <div id="preview-frame-wrap" style="border-radius: 12px; overflow: hidden; background: #111; border: 1px solid #222; min-height: 120px; display: flex; align-items: center; justify-content: center;">
+                <div id="preview-placeholder" class="text-center text-light py-4 px-3">
+                    <i class="bi bi-camera-video-off fs-2 d-block mb-2"></i>
+                    <div class="small">Preview is disabled</div>
+                </div>
+                <img
+                    id="live-preview-img"
+                    src=""
+                    alt="Live Camera"
+                    data-stream-url="{% url 'door_control_camera_stream' %}"
+                    class="preview-image"
+                >
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const previewImg = document.getElementById('live-preview-img');
+    const previewBadge = document.getElementById('preview-status-badge');
+    const previewToggleBtn = document.getElementById('preview-toggle-btn');
+    const previewPlaceholder = document.getElementById('preview-placeholder');
+    let previewRunning = false;
+    const AUTO_REFRESH_MS = 30000;
+
+    function startPreview() {
+        if (!previewImg) return;
+        const baseUrl = previewImg.dataset.streamUrl;
+        previewImg.src = `${baseUrl}?t=${Date.now()}`;
+        previewImg.style.display = 'block';
+        if (previewPlaceholder) {
+            previewPlaceholder.style.display = 'none';
+        }
+        previewRunning = true;
+        if (previewBadge) {
+            previewBadge.className = 'badge bg-success';
+            previewBadge.textContent = 'Preview Running';
+        }
+        if (previewToggleBtn) {
+            previewToggleBtn.className = 'btn btn-sm btn-danger';
+            previewToggleBtn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Stop Preview';
+        }
+    }
+
+    function stopPreview() {
+        if (!previewImg) return;
+        previewImg.removeAttribute('src');
+        previewImg.style.display = 'none';
+        if (previewPlaceholder) {
+            previewPlaceholder.style.display = 'block';
+        }
+        previewRunning = false;
+        if (previewBadge) {
+            previewBadge.className = 'badge bg-secondary';
+            previewBadge.textContent = 'Preview Stopped';
+        }
+        if (previewToggleBtn) {
+            previewToggleBtn.className = 'btn btn-sm btn-success';
+            previewToggleBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Preview';
+        }
+    }
+
+    function togglePreview() {
+        if (previewRunning) {
+            stopPreview();
+        } else {
+            startPreview();
+        }
+    }
+
+    const inactiveAlert = document.getElementById('inactive-process-alert');
+    if (inactiveAlert) {
+        setTimeout(() => {
+            inactiveAlert.style.display = 'none';
+        }, 3000);
+    }
+
+    const runningAlert = document.getElementById('running-process-alert');
+    if (runningAlert) {
+        setTimeout(() => {
+            runningAlert.style.display = 'none';
+        }, 4000);
+    }
+
+    setInterval(() => {
+        if (!previewRunning) {
+            window.location.reload();
+        }
+    }, AUTO_REFRESH_MS);
+</script>
+{% endblock %}

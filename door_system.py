@@ -8,6 +8,7 @@ Main Door Control Script - IMPROVED VERSION
 import os
 import sys
 import time
+import threading
 import cv2
 import numpy as np
 import face_recognition
@@ -77,6 +78,7 @@ FULL_MODE_MOTION_TIMEOUT_SECONDS = float(getattr(settings, 'FULL_MODE_MOTION_TIM
 FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOLDOWN_SECONDS', 30))
 LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 5))
 LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 30))
+LIVE_FALLBACK_MIN_INTERVAL_SECONDS = float(getattr(settings, 'LIVE_FALLBACK_MIN_INTERVAL_SECONDS', 2.5))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -108,6 +110,20 @@ def log_system(log_type, message, details=None):
         pass
 
 
+def run_in_background(task_name, target, *args, **kwargs):
+    """Run a potentially slow task on a daemon thread so UI loops remain responsive."""
+
+    def _runner():
+        try:
+            target(*args, **kwargs)
+        except Exception as e:
+            print(f"   ⚠️ Background task failed ({task_name}): {e}")
+
+    thread = threading.Thread(target=_runner, daemon=True)
+    thread.start()
+    return thread
+
+
 def save_attendance(student, entry_type='success', location='Main Door'):
     """Save attendance record and send notifications"""
     try:
@@ -134,7 +150,12 @@ def save_attendance(student, entry_type='success', location='Main Door'):
         # Send notifications
         if NOTIFICATIONS_AVAILABLE:
             try:
-                NotificationService.notify_attendance(student, attendance.timestamp)
+                run_in_background(
+                    'attendance notification',
+                    NotificationService.notify_attendance,
+                    student,
+                    attendance.timestamp,
+                )
             except Exception as e:
                 print(f"   ⚠️ Notification error: {e}")
         
@@ -170,7 +191,11 @@ def notify_unknown_alert(frame=None, reason='Unknown person detected'):
 
     if NOTIFICATIONS_AVAILABLE:
         try:
-            NotificationService.notify_unknown_person(snapshot_path)
+            run_in_background(
+                'unknown person alert',
+                NotificationService.notify_unknown_person,
+                snapshot_path,
+            )
             return True
         except Exception as e:
             print(f"   ⚠️ Unknown alert notification failed: {e}")
@@ -1213,6 +1238,7 @@ def live_camera_attendance():
     unknown_start_time = None
     last_unknown_alert_time = 0
     last_unknown_frame = None
+    last_fallback_detection_time = 0
     
     # Status messages (shown at bottom)
     status_messages = []
@@ -1284,7 +1310,12 @@ def live_camera_attendance():
                         number_of_times_to_upsample=DETECTION_UPSAMPLE
                     )
 
-                    if not face_locations:
+                    should_run_fallback = (
+                        not face_locations and
+                        current_time - last_fallback_detection_time >= LIVE_FALLBACK_MIN_INTERVAL_SECONDS
+                    )
+
+                    if should_run_fallback:
                         fallback_frame = cv2.resize(
                             rgb_frame,
                             (0, 0),
@@ -1299,6 +1330,7 @@ def live_camera_attendance():
                         if face_locations:
                             small_frame = fallback_frame
                             scale_back = 1.0 / FALLBACK_DETECTION_SCALE
+                        last_fallback_detection_time = current_time
                     
                     if face_locations:
                         # Generate encodings for all faces
@@ -1385,10 +1417,8 @@ def live_camera_attendance():
                                                 recent_attendance[student.id] = current_time
                                             else:
                                                 # Cooldown
-                                                remaining = int(ATTENDANCE_COOLDOWN - (current_time - last_marked))
                                                 color = (255, 165, 0)  # Orange
                                                 status = "cooldown"
-                                                status_messages.append(f"⏳ {name} (Wait {remaining}s)")
                                         else:
                                             color = (0, 165, 255)  # Orange-ish
                                             status = "low_conf"
@@ -1679,6 +1709,7 @@ def live_camera_door_lock():
     unknown_start_time = None
     last_unknown_alert_time = 0
     last_unknown_frame = None
+    last_fallback_detection_time = 0
     
     # Status messages
     status_messages = []
@@ -1769,7 +1800,12 @@ def live_camera_door_lock():
                         number_of_times_to_upsample=DETECTION_UPSAMPLE
                     )
 
-                    if not face_locations:
+                    should_run_fallback = (
+                        not face_locations and
+                        current_time - last_fallback_detection_time >= LIVE_FALLBACK_MIN_INTERVAL_SECONDS
+                    )
+
+                    if should_run_fallback:
                         fallback_frame = cv2.resize(
                             rgb_frame,
                             (0, 0),
@@ -1784,6 +1820,7 @@ def live_camera_door_lock():
                         if face_locations:
                             small_frame = fallback_frame
                             scale_back = 1.0 / FALLBACK_DETECTION_SCALE
+                        last_fallback_detection_time = current_time
                     
                     if face_locations:
                         face_encodings = face_recognition.face_encodings(small_frame, face_locations)
@@ -2054,30 +2091,30 @@ if __name__ == '__main__':
     print("═" * 58)
     print("\n  SELECT MODE:\n")
     print("  ┌─────────────────────────────────────────────────────┐")
-    print("  │  1. Full Mode        (Arduino + Camera + PIR)      │")
-    print("  │  4. Live View        (Continuous recognition)      │")
-    print("  │  5. Live Attendance  (Auto attendance - No Arduino)│")
-    print("  │  6. Live Door Lock   (Camera + Arduino - No PIR)   │")
+    print("  │  1. Live View        (Continuous recognition)      │")
+    print("  │  2. Live Attendance  (Auto attendance - No Arduino)│")
+    print("  │  3. Live Door Lock   (Camera + Arduino - No PIR)   │")
+    print("  │  4. Full Mode        (Arduino + Camera + PIR)      │")
     print("  └─────────────────────────────────────────────────────┘")
     print("\n" + "═" * 58)
     
-    choice = input("\n  Enter choice (1,4,5,6): ").strip()
+    choice = sys.argv[1].strip() if len(sys.argv) > 1 else input("\n  Enter choice (1,2,3,4): ").strip()
     
     if choice == '1':
-        print("\n  📌 Full Mode: Arduino + Camera + PIR required")
-        DoorSystem(require_arduino=True).run_full_mode_live()
-        
-    elif choice == '4':
         print("\n  📌 Live View: Continuous face detection")
         live_view()
         
-    elif choice == '5':
+    elif choice == '2':
         print("\n  📌 Live Attendance: Auto attendance (no Arduino)")
         live_camera_attendance()
         
-    elif choice == '6':
+    elif choice == '3':
         print("\n  📌 Live Door Lock: Camera + Arduino (no PIR sensor)")
         live_camera_door_lock()
+        
+    elif choice == '4':
+        print("\n  📌 Full Mode: Arduino + Camera + PIR required")
+        DoorSystem(require_arduino=True).run_full_mode_live()
         
     else:
         print("\n  ⚠️ Invalid choice. Running Live Attendance...")

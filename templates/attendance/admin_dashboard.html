@@ -111,6 +111,11 @@
                 <a href="{% url 'student_list' %}" class="btn btn-outline-primary">
                     <i class="bi bi-people me-2"></i>Manage Students
                 </a>
+                {% if request.user.is_superuser %}
+                <a href="{% url 'door_control_panel' %}" class="btn btn-outline-danger">
+                    <i class="bi bi-door-open me-2"></i>Door Control
+                </a>
+                {% endif %}
                 <a href="{% url 'reports' %}" class="btn btn-outline-success">
                     <i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Report
                 </a>

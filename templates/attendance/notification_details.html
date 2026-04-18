@@ -1,0 +1,51 @@
+<div class="row g-3">
+    <div class="col-md-6">
+        <h6 class="d-flex justify-content-between align-items-center mb-2">
+            <span><i class="bi bi-exclamation-triangle-fill text-danger"></i> Alerts</span>
+            <span class="badge bg-danger" id="alertsCountBadge">{{ unread_alert_count }}</span>
+        </h6>
+        {% for alert in recent_alerts %}
+            <div class="notify-modal-item {% if alert.is_read %}read-notify{% else %}unread-notify{% endif %} notify-alert-item" data-notify-key="alert-{{ alert.id }}" data-notify-type="alert" data-notify-id="{{ alert.id }}" tabindex="0" role="button" aria-label="Mark alert as read">
+                <button type="button" class="notify-dismiss-btn" data-notify-action="clear" aria-label="Clear alert">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <div class="notify-modal-title">{{ alert.display_message|default:alert.message }}</div>
+                <div class="notify-modal-meta mb-2">{{ alert.timestamp|date:"d M Y, h:i:s A" }}</div>
+                {% if alert.image_url %}
+                    <a href="{{ alert.image_url }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ alert.image_url }}" alt="Unknown alert image" class="notify-modal-thumb">
+                    </a>
+                {% endif %}
+            </div>
+        {% empty %}
+            <div class="notify-empty" id="alertsEmptyState">No recent alerts</div>
+        {% endfor %}
+        <div class="notify-empty d-none" id="alertsClearedState">All alerts cleared</div>
+    </div>
+
+    <div class="col-md-6">
+        <h6 class="d-flex justify-content-between align-items-center mb-2">
+            <span><i class="bi bi-calendar-check-fill text-success"></i> Attendance Entries</span>
+            <span class="badge bg-success" id="entriesCountBadge">{{ recent_entry_count }}</span>
+        </h6>
+        {% for entry in recent_attendance_entries %}
+            <div class="notify-modal-item {% if entry.is_read %}read-notify{% else %}unread-notify{% endif %} notify-entry-item" data-notify-key="entry-{{ entry.id }}" data-notify-type="entry" data-notify-id="{{ entry.id }}" tabindex="0" role="button" aria-label="Mark attendance entry as read">
+                <button type="button" class="notify-dismiss-btn" data-notify-action="clear" aria-label="Clear attendance entry">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <div class="notify-modal-title">{{ entry.student_name }} - {{ entry.entry_type }}</div>
+                <div class="notify-modal-meta mb-2">
+                    {{ entry.timestamp|date:"d M Y, h:i:s A" }} | {{ entry.location }}
+                </div>
+                {% if entry.image_url %}
+                    <a href="{{ entry.image_url }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ entry.image_url }}" alt="Attendance image" class="notify-modal-thumb">
+                    </a>
+                {% endif %}
+            </div>
+        {% empty %}
+            <div class="notify-empty" id="entriesEmptyState">No recent attendance entries</div>
+        {% endfor %}
+        <div class="notify-empty d-none" id="entriesClearedState">All attendance notifications cleared</div>
+    </div>
+</div>

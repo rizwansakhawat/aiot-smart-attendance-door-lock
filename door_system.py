@@ -74,9 +74,9 @@ MAX_RECONNECT_ATTEMPTS = 3
 RECONNECT_WAIT_TIME = 2  # Wait 2 seconds between attempts
 FULL_MODE_RECOGNITION_INTERVAL = float(getattr(settings, 'FULL_MODE_RECOGNITION_INTERVAL', 0.4))
 FULL_MODE_MOTION_TIMEOUT_SECONDS = float(getattr(settings, 'FULL_MODE_MOTION_TIMEOUT_SECONDS', 10))
-FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOLDOWN_SECONDS', 60))
-LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 8))
-LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 60))
+FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOLDOWN_SECONDS', 30))
+LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 5))
+LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 30))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -98,12 +98,12 @@ def find_arduino_port():
     return None
 
 
-def log_system(log_type, message):
+def log_system(log_type, message, details=None):
     """Log to database and console"""
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{timestamp}] [{log_type.upper()}] {message}")
     try:
-        SystemLog.objects.create(log_type=log_type, message=message)
+        SystemLog.objects.create(log_type=log_type, message=message, details=details)
     except:
         pass
 
@@ -166,7 +166,7 @@ def save_unknown_snapshot(frame, prefix='unknown'):
 def notify_unknown_alert(frame=None, reason='Unknown person detected'):
     """Log and send unknown-person alert notification with optional snapshot."""
     snapshot_path = save_unknown_snapshot(frame, prefix='unknown_live')
-    log_system('warning', reason)
+    log_system('warning', reason, details=snapshot_path)
 
     if NOTIFICATIONS_AVAILABLE:
         try:
@@ -637,7 +637,7 @@ class DoorSystem:
         )
 
         print_error_box("NO KNOWN FACE DETECTED", message)
-        log_system('warning', message)
+        log_system('warning', message, details=filepath)
 
         if NOTIFICATIONS_AVAILABLE:
             try:
@@ -1584,7 +1584,7 @@ def live_camera_door_lock():
     # ─────────────────────────────────────────────────────────────
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds
     UNLOCK_DURATION = 5             # Keep door unlocked for 5 seconds
-    PERSON_COOLDOWN = 10            # Wait 10 seconds before unlocking for same person again
+    PERSON_COOLDOWN = 5             # Wait 5 seconds before unlocking for same person again
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
     DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
     DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))

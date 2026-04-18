@@ -204,17 +204,31 @@
                     </div>
                 </div>
                 
-                <!-- Student Filter -->
-                <div class="form-section" id="student-filter-section">
+                <!-- Department Filter -->
+                <div class="form-section" id="department-filter-section">
+                    <h6>
+                        <span><i class="bi bi-building me-2"></i>Department</span>
+                    </h6>
+                    <p class="section-help">Optional for Daily/Summary reports.</p>
+                    <select name="department" class="form-select">
+                        <option value="">All Departments</option>
+                        {% for department in departments %}
+                        <option value="{{ department.pk }}">{{ department.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Student Filter (Student Report only) -->
+                <div class="form-section d-none" id="student-filter-section">
                     <h6 class="d-flex align-items-center justify-content-between">
                         <span><i class="bi bi-person-check me-2"></i>Student</span>
                         <span id="student-required-note" class="badge text-bg-warning student-required-note">
                             <i class="bi bi-exclamation-triangle"></i>Required for Student Report
                         </span>
                     </h6>
-                    <p class="section-help">Optional for Daily/Summary reports.</p>
+                    <p class="section-help">Select one student to generate an individual report.</p>
                     <select name="student" class="form-select">
-                        <option value="">All Students</option>
+                        <option value="">Select Student</option>
                         {% for student in students %}
                         <option value="{{ student.pk }}">{{ student.name }} ({{ student.roll_number }})</option>
                         {% endfor %}
@@ -266,18 +280,41 @@
         });
     }
 
-    function updateStudentRequirement() {
+    function updateReportTypeFilters() {
         const reportTypeInput = document.querySelector('input[name="report_type"]:checked');
         const studentSelect = document.querySelector('select[name="student"]');
-        const requiredNote = document.getElementById('student-required-note');
         const studentSection = document.getElementById('student-filter-section');
+        const departmentSelect = document.querySelector('select[name="department"]');
+        const departmentSection = document.getElementById('department-filter-section');
+        const requiredNote = document.getElementById('student-required-note');
 
-        if (!reportTypeInput || !studentSelect || !requiredNote || !studentSection) return;
+        if (!reportTypeInput) return;
 
         const isStudentReport = reportTypeInput.value === 'student';
-        studentSelect.required = isStudentReport;
-        requiredNote.classList.toggle('show', isStudentReport);
-        studentSection.classList.toggle('border-warning', isStudentReport);
+
+        if (studentSection) {
+            studentSection.classList.toggle('d-none', !isStudentReport);
+            studentSection.classList.toggle('border-warning', isStudentReport);
+        }
+
+        if (departmentSection) {
+            departmentSection.classList.toggle('d-none', isStudentReport);
+        }
+
+        if (studentSelect) {
+            studentSelect.required = isStudentReport;
+            if (!isStudentReport) {
+                studentSelect.value = '';
+            }
+        }
+
+        if (departmentSelect && isStudentReport) {
+            departmentSelect.value = '';
+        }
+
+        if (requiredNote) {
+            requiredNote.classList.toggle('show', isStudentReport);
+        }
     }
 
     // Keep visual card state synced for both click and keyboard interactions.
@@ -285,7 +322,7 @@
         radio.addEventListener('change', () => {
             syncCardState(radio.closest('.report-type-selector') || radio.closest('.form-section'));
             if (radio.name === 'report_type') {
-                updateStudentRequirement();
+                updateReportTypeFilters();
             }
         });
     });
@@ -323,6 +360,6 @@
 
     // Initialize visual and validation state on first load.
     document.querySelectorAll('.report-type-selector, .form-section').forEach(syncCardState);
-    updateStudentRequirement();
+    updateReportTypeFilters();
 </script>
 {% endblock %}

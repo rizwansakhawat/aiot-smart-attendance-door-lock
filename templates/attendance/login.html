@@ -4,234 +4,408 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Smart Attendance System</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
     <style>
-        * {
-            font-family: 'Inter', sans-serif;
+        :root {
+            --bg-start: #171936;
+            --bg-end: #163e6f;
+            --card-top: #4d5be8;
+            --card-top-dark: #4037cb;
+            --surface: #ffffff;
+            --text: #1c2430;
+            --muted: #7a8597;
+            --border: #dfe5ef;
+            --focus: rgba(77, 91, 232, 0.18);
+            --shadow: 0 28px 80px rgba(0, 0, 0, 0.36);
         }
-        
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+        }
+
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 15% 70%, rgba(255, 255, 255, 0.07) 0 7%, transparent 7.5%),
+                radial-gradient(circle at 90% 10%, rgba(255, 255, 255, 0.07) 0 9%, transparent 9.5%),
+                linear-gradient(135deg, var(--bg-start) 0%, #1a2348 45%, var(--bg-end) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 24px;
+            overflow: hidden;
         }
-        
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.05);
+            filter: blur(1px);
+        }
+
+        body::before {
+            width: 420px;
+            height: 420px;
+            top: -180px;
+            right: -120px;
+        }
+
+        body::after {
+            width: 260px;
+            height: 260px;
+            bottom: -120px;
+            left: -90px;
+        }
+
         .login-container {
             width: 100%;
-            max-width: 420px;
+            max-width: 410px;
+            position: relative;
+            z-index: 1;
         }
-        
+
         .login-card {
-            background: white;
-            border-radius: 25px;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.4);
             overflow: hidden;
+            border-radius: 28px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
         }
-        
+
         .login-header {
-            background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
-            padding: 40px;
+            background: linear-gradient(180deg, var(--card-top) 0%, var(--card-top-dark) 100%);
+            color: #fff;
             text-align: center;
-            color: white;
+            padding: 38px 34px 40px;
         }
-        
-        .login-header .icon {
-            width: 80px;
-            height: 80px;
-            background: rgba(255,255,255,0.2);
+
+        .brand-icon {
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 22px;
             border-radius: 20px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.17);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        }
+
+        .brand-icon svg {
+            width: 38px;
+            height: 38px;
+            stroke: #ffffff;
+        }
+
+        .login-header h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .login-header p {
+            margin: 8px 0 0;
+            font-size: 0.97rem;
+            opacity: 0.92;
+        }
+
+        .login-body {
+            padding: 40px 34px 38px;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            border: 1px solid #f3c6cb;
+            background: #fff7f8;
+            color: #ce2d40;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .message svg {
+            flex: 0 0 auto;
+            width: 18px;
+            height: 18px;
+            margin-top: 1px;
+            stroke: currentColor;
+        }
+
+        .field {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .field input {
+            width: 100%;
+            height: 54px;
+            border: 1.5px solid var(--border);
+            border-radius: 14px;
+            background: #fff;
+            font: inherit;
+            font-size: 1rem;
+            color: var(--text);
+            padding: 16px 52px 0 50px;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .field input::placeholder {
+            color: transparent;
+        }
+
+        .field input:focus {
+            border-color: var(--card-top);
+            box-shadow: 0 0 0 4px var(--focus);
+        }
+
+        .field label {
+            position: absolute;
+            left: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            pointer-events: none;
+            transition: transform 0.18s ease, top 0.18s ease, font-size 0.18s ease, color 0.18s ease;
+            background: #fff;
+            padding: 0 4px;
+        }
+
+        .field input:focus + label,
+        .field input:not(:placeholder-shown) + label {
+            top: 0;
+            transform: translateY(-50%);
+            font-size: 0.8rem;
+            color: var(--card-top-dark);
+        }
+
+        .field .field-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 22px;
+            height: 22px;
+            color: #8d96a8;
+            pointer-events: none;
+        }
+
+        .field .field-icon svg,
+        .field .toggle-password svg {
+            width: 22px;
+            height: 22px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 30px;
+            border: 0;
+            background: transparent;
+            color: #8d96a8;
+            padding: 0;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+        }
+
+        .toggle-password:hover {
+            color: var(--card-top-dark);
+        }
+
+        .submit-btn {
+            width: 100%;
+            height: 56px;
+            border: 0;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #4d5be8 0%, #423ed1 100%);
+            color: #fff;
+            font: inherit;
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 12px 28px rgba(77, 91, 232, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 34px rgba(77, 91, 232, 0.34);
+            filter: brightness(1.03);
+        }
+
+        .submit-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .footer-text {
+            margin: 18px 0 0;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.9rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 2.5rem;
+            gap: 8px;
         }
-        
-        .login-header h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 5px;
+
+        .footer-text svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex: 0 0 auto;
         }
-        
-        .login-header p {
-            opacity: 0.9;
-            margin-bottom: 0;
-            font-size: 0.9rem;
+
+        @media (max-width: 480px) {
+            body {
+                padding: 16px;
+            }
+
+            .login-header,
+            .login-body {
+                padding-left: 22px;
+                padding-right: 22px;
+            }
+
+            .login-header {
+                padding-top: 32px;
+                padding-bottom: 34px;
+            }
         }
-        
-        .login-body {
-            padding: 40px;
-        }
-        
-        .form-floating {
-            margin-bottom: 20px;
-        }
-        
-        .form-floating .form-control {
-            border-radius: 12px;
-            border: 2px solid #e9ecef;
-            padding: 20px 15px 10px 50px;
-            height: 60px;
-            font-size: 1rem;
-        }
-        
-        .form-floating .form-control:focus {
-            border-color: #4361ee;
-            box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.15);
-        }
-        
-        .form-floating label {
-            padding-left: 50px;
-            color: #6c757d;
-        }
-        
-        .form-floating .input-icon {
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d;
-            font-size: 1.2rem;
-            z-index: 5;
-        }
-        
-        .btn-login {
-            width: 100%;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
-            border: none;
-            color: white;
-            transition: all 0.3s;
-        }
-        
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(67, 97, 238, 0.4);
-            color: white;
-        }
-        
-        .alert {
-            border-radius: 12px;
-            border: none;
-            margin-bottom: 20px;
-            color: red;
-            padding: 15px;
-            font-size: 0.9rem;
-            border: 2px solid #f8d7da;
-        }
-        
-        .footer-text {
-            text-align: center;
-            margin-top: 20px;
-            color: #6c757d;
-            font-size: 0.85rem;
-        }
-        
-        .floating-shapes {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: -1;
-        }
-        
-        .shape {
-            position: absolute;
-            background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-        }
-        
-        .shape-1 { width: 400px; height: 400px; top: -200px; right: -100px; }
-        .shape-2 { width: 300px; height: 300px; bottom: -150px; left: -100px; }
-        .shape-3 { width: 200px; height: 200px; top: 50%; left: 10%; }
     </style>
 </head>
 <body>
-    <!-- Floating Shapes -->
-    <div class="floating-shapes">
-        <div class="shape shape-1"></div>
-        <div class="shape shape-2"></div>
-        <div class="shape shape-3"></div>
-    </div>
-    
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <div class="icon">
-                    <i class="bi bi-shield-check"></i>
+                <div class="brand-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3l6 2v5c0 4.3-2.6 8.2-6 9.5C8.6 18.2 6 14.3 6 10V5l6-2z"></path>
+                        <path d="M9.5 12.1l1.9 1.9 3.4-3.8"></path>
+                    </svg>
                 </div>
                 <h1>Smart Attendance</h1>
                 <p>Face Recognition Door Lock System</p>
             </div>
-            
+
             <div class="login-body">
-                <!-- Messages -->
                 {% if messages %}
                     {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-                            {{ message|safe }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        <div class="message" role="alert">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M12 8v5"></path>
+                                <path d="M12 16h.01"></path>
+                            </svg>
+                            <span>{{ message|safe }}</span>
                         </div>
                     {% endfor %}
                 {% endif %}
-                
+
                 <form method="POST">
                     {% csrf_token %}
-                    
-                    <div class="form-floating position-relative">
-                        <i class="bi bi-person input-icon"></i>
-                        <input type="text" name="username" class="form-control" id="username" 
-                               placeholder="Username" required autofocus>
+
+                    <div class="field">
+                        <span class="field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M20 21a8 8 0 0 0-16 0"></path>
+                                <circle cx="12" cy="8" r="4"></circle>
+                            </svg>
+                        </span>
+                        <input type="text" name="username" id="username" placeholder=" " required autofocus>
                         <label for="username">Username</label>
                     </div>
-                    
-                    <div class="form-floating position-relative">
-                        <i class="bi bi-lock input-icon"></i>
-                        <input type="password" name="password" class="form-control" id="password" 
-                               placeholder="Password" required>
-                        <label for="password">Password</label>
 
-                        <div class="password-toggle" onclick="togglePasswordVisibility()" style="cursor: pointer; position: absolute; right: 55px; top: 50%; transform: translateY(-50%);">
-                            <i class="bi bi-eye input-icon" id="eyeOn"></i>
-                            <i style='display:none' class="bi bi-eye-slash input-icon" id='eyeOff'></i>
-                        </div>
+                    <div class="field">
+                        <span class="field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                                <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                            </svg>
+                        </span>
+                        <input type="password" name="password" id="password" placeholder=" " required>
+                        <label for="password">Password</label>
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" aria-label="Toggle password visibility">
+                            <svg id="eyeOpen" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg id="eyeClosed" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
+                                <path d="M3 3l18 18"></path>
+                                <path d="M10.6 10.6a3 3 0 0 0 4.24 4.24"></path>
+                                <path d="M9.88 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a20.9 20.9 0 0 1-4.03 4.76"></path>
+                                <path d="M6.1 6.1C3.31 8.16 2 12 2 12s3.5 7 10 7c1.16 0 2.24-.15 3.24-.43"></path>
+                            </svg>
+                        </button>
                     </div>
-                    
-                    <button type="submit" class="btn btn-login">
-                        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+
+                    <button type="submit" class="submit-btn">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M10 17l5-5-5-5"></path>
+                            <path d="M15 12H3"></path>
+                            <path d="M21 21V3"></path>
+                        </svg>
+                        <span>Sign In</span>
                     </button>
                 </form>
-                
+
                 <p class="footer-text">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Contact administrator for login credentials
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"></circle>
+                        <path d="M12 10v6"></path>
+                        <path d="M12 7h.01"></path>
+                    </svg>
+                    <span>Contact administrator for login credentials</span>
                 </p>
             </div>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
         function togglePasswordVisibility() {
-            const passwordInput = document.getElementById('password');
-            const eyeOn = document.getElementById('eyeOn');
-            const eyeOff = document.getElementById('eyeOff');
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            eyeOn.style.display = type === 'password' ? 'block' : 'none';
-            eyeOff.style.display = type === 'password' ? 'none' : 'block';
+            const passwordInput = document.getElementById("password");
+            const eyeOpen = document.getElementById("eyeOpen");
+            const eyeClosed = document.getElementById("eyeClosed");
+            const isHidden = passwordInput.type === "password";
+
+            passwordInput.type = isHidden ? "text" : "password";
+            eyeOpen.style.display = isHidden ? "none" : "block";
+            eyeClosed.style.display = isHidden ? "block" : "none";
         }
     </script>
 </body>

@@ -132,3 +132,45 @@ class SystemLog(models.Model):
     
     def __str__(self):
         return f"[{self.log_type.upper()}] {self.timestamp.strftime('%Y-%m-%d %H:%M')} - {self.message[:50]}"
+
+
+class NotificationState(models.Model):
+    """Per-user notification state (read/cleared) persisted across browsers."""
+
+    NOTIFICATION_TYPE_CHOICES = [
+        ('alert', 'Alert'),
+        ('entry', 'Attendance Entry'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notification_states',
+        verbose_name='User'
+    )
+    notification_type = models.CharField(
+        max_length=10,
+        choices=NOTIFICATION_TYPE_CHOICES,
+        verbose_name='Notification Type'
+    )
+    object_id = models.PositiveBigIntegerField(verbose_name='Linked Object ID')
+    is_read = models.BooleanField(default=False, verbose_name='Is Read')
+    is_cleared = models.BooleanField(default=False, verbose_name='Is Cleared')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ('user', 'notification_type', 'object_id')
+        indexes = [
+            models.Index(fields=['user', 'notification_type', 'is_cleared']),
+            models.Index(fields=['user', 'notification_type', 'is_read']),
+        ]
+        verbose_name = 'Notification State'
+        verbose_name_plural = 'Notification States'
+
+    def __str__(self):
+        return (
+            f"{self.user.username} - {self.notification_type}:{self.object_id} "
+            f"(read={self.is_read}, cleared={self.is_cleared})"
+        )

@@ -1,4 +1,5 @@
 <!-- templates/base.html -->
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,13 +8,10 @@
     <title>{% block title %}Smart Attendance System{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     
     <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/font/bootstrap-icons.css' %}" rel="stylesheet">
     
     <style>
         :root {
@@ -27,7 +25,7 @@
         }
         
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Arial, sans-serif;
             background-color: #f5f7fb;
             min-height: 100vh;
         }
@@ -306,6 +304,160 @@
             border-radius: 10px;
             border: none;
         }
+
+        .sidebar-notify-badge {
+            margin-left: auto;
+            background: rgba(231, 29, 54, 0.2);
+            color: #ffb3bd;
+            border: 1px solid rgba(231, 29, 54, 0.4);
+            min-width: 26px;
+            text-align: center;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+        }
+
+        .notify-modal-item {
+            position: relative;
+            border: 1px solid #e9eef6;
+            border-radius: 10px;
+            padding: 10px;
+            padding-right: 34px;
+            margin-bottom: 8px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .notify-modal-item.unread-notify {
+            border-left: 4px solid #2f58ff;
+            background: #eaf1ff;
+            box-shadow: inset 0 0 0 1px rgba(47, 88, 255, 0.16);
+        }
+
+        .notify-modal-item.read-notify {
+            opacity: 0.88;
+            border-left: 4px solid #b8c7e6;
+            background: #fdfefe;
+        }
+
+        .notify-modal-item:hover {
+            transform: translateY(-1px);
+            border-color: #d9e2f0;
+        }
+
+        .notify-modal-item.read-notify:hover {
+            background: #fbfcfe;
+        }
+
+        .notify-dismiss-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: #7f8aa3;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            padding: 0;
+            z-index: 2;
+        }
+
+        .notify-dismiss-btn:hover {
+            background: rgba(231, 29, 54, 0.08);
+            color: #e71d36;
+        }
+
+        .notify-tools {
+            display: flex;
+            gap: 8px;
+            margin-right: 8px;
+        }
+
+        .notify-tools .btn {
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border-radius: 8px;
+        }
+
+        .notify-modal-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .notify-modal-title {
+            font-size: 0.92rem;
+            color: #23314f;
+            margin-bottom: 4px;
+        }
+
+        .notify-modal-meta {
+            font-size: 0.78rem;
+            color: #79839a;
+        }
+
+        .notify-modal-thumb {
+            width: 68px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #dde5f1;
+        }
+
+        .notify-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: var(--dark-color);
+            font-size: 0.92rem;
+        }
+
+        .notify-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .notify-item {
+            border: 1px solid #eef2f7;
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background: #fff;
+        }
+
+        .notify-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .notify-msg {
+            font-size: 0.86rem;
+            color: #2f3b52;
+            margin-bottom: 4px;
+            line-height: 1.35;
+        }
+
+        .notify-time {
+            font-size: 0.75rem;
+            color: #7a859b;
+        }
+
+        .notify-empty {
+            font-size: 0.84rem;
+            color: #8791a6;
+            padding: 8px;
+            text-align: center;
+            border: 1px dashed #dce3ef;
+            border-radius: 10px;
+            background: #fbfcff;
+        }
         
         /* Forms */
         .form-control, .form-select {
@@ -429,7 +581,7 @@
             .main-content {
                 padding: 80px 15px 20px 15px;
             }
-            
+
             .page-header h1 {
                 font-size: 1.5rem;
             }
@@ -632,6 +784,15 @@
                     {% if user.is_staff %}Attendance Records{% else %}My Attendance{% endif %}
                 </a>
             </li>
+
+            <li>
+                <a href="#" data-bs-toggle="modal" data-bs-target="#notificationsModal">
+                    <i class="bi bi-bell-fill"></i> Notifications
+                    {% if user.is_authenticated %}
+                        <span class="sidebar-notify-badge">{{ unread_alert_count|add:recent_entry_count }}</span>
+                    {% endif %}
+                </a>
+            </li>
             
             {% if user.is_staff %}
             <!-- Admin Only -->
@@ -690,6 +851,7 @@
     <!-- Main Content -->
     <!-- Main Content -->
     <main class="main-content">
+
         <!-- Messages -->
         {% if messages %}
             {% for message in messages %}
@@ -702,9 +864,31 @@
         
         {% block content %}{% endblock %}
     </main>
+
+    {% if user.is_authenticated %}
+    <div class="modal fade" id="notificationsModal" tabindex="-1" aria-labelledby="notificationsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notificationsModalLabel"><i class="bi bi-bell-fill text-warning"></i> Notification Details</h5>
+                    <div class="d-flex align-items-center">
+                        <div class="notify-tools">
+                            <button type="button" class="btn btn-outline-primary" id="markAllReadBtn">Mark all read</button>
+                            <button type="button" class="btn btn-outline-danger" id="clearAllBtn">Clear all</button>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    {% include 'attendance/notification_details.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     
     <!-- Mobile Navigation Script -->
     <script>
@@ -712,6 +896,127 @@
         const overlay = document.getElementById('sidebar-overlay');
         const hamburgerIcon = document.getElementById('hamburger-icon');
         const alert = document.querySelector('.alert');
+        const markAllReadBtn = document.getElementById('markAllReadBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const notificationStateApiUrl = "{% url 'notification_state_api' %}";
+
+        function getUnreadItems() {
+            return Array.from(document.querySelectorAll('.notify-modal-item.unread-notify'));
+        }
+
+        function getNotificationItems() {
+            return Array.from(document.querySelectorAll('.notify-modal-item[data-notify-key]'));
+        }
+
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) {
+                return parts.pop().split(';').shift();
+            }
+            return '';
+        }
+
+        async function persistNotificationState(action, notificationItems) {
+            const keys = (notificationItems || [])
+                .map(item => item?.dataset?.notifyKey)
+                .filter(Boolean);
+
+            if (!keys.length) {
+                return true;
+            }
+
+            const response = await fetch(notificationStateApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ action, keys }),
+            });
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const result = await response.json();
+            return Boolean(result.success);
+        }
+
+        async function markNotificationRead(item) {
+            if (!item || item.style.display === 'none' || item.classList.contains('read-notify')) {
+                return;
+            }
+
+            const saved = await persistNotificationState('read', [item]);
+            if (!saved) {
+                return;
+            }
+
+            item.classList.remove('unread-notify');
+            item.classList.add('read-notify');
+            updateModalCounters();
+            updateSidebarNotificationBadge();
+        }
+
+        async function clearNotification(item) {
+            if (!item) {
+                return;
+            }
+
+            const saved = await persistNotificationState('clear', [item]);
+            if (!saved) {
+                return;
+            }
+
+            item.style.display = 'none';
+            updateModalCounters();
+            showClearedStateIfNeeded();
+            updateSidebarNotificationBadge();
+        }
+
+        function updateSidebarNotificationBadge() {
+            const badge = document.querySelector('.sidebar-notify-badge');
+            if (!badge) {
+                return;
+            }
+
+            const unreadVisible = getNotificationItems().filter(item => item.style.display !== 'none' && item.classList.contains('unread-notify')).length;
+            badge.textContent = unreadVisible;
+            badge.style.display = unreadVisible > 0 ? 'inline-block' : 'none';
+        }
+
+        function updateModalCounters() {
+            const alertsCountBadge = document.getElementById('alertsCountBadge');
+            const entriesCountBadge = document.getElementById('entriesCountBadge');
+
+            const visibleAlerts = Array.from(document.querySelectorAll('.notify-alert-item.unread-notify')).filter(item => item.style.display !== 'none').length;
+            const visibleEntries = Array.from(document.querySelectorAll('.notify-entry-item.unread-notify')).filter(item => item.style.display !== 'none').length;
+
+            if (alertsCountBadge) {
+                alertsCountBadge.textContent = visibleAlerts;
+            }
+            if (entriesCountBadge) {
+                entriesCountBadge.textContent = visibleEntries;
+            }
+        }
+
+        function showClearedStateIfNeeded() {
+            const visibleAlerts = Array.from(document.querySelectorAll('.notify-alert-item')).some(item => item.style.display !== 'none');
+            const visibleEntries = Array.from(document.querySelectorAll('.notify-entry-item')).some(item => item.style.display !== 'none');
+            const alertsClearedState = document.getElementById('alertsClearedState');
+            const entriesClearedState = document.getElementById('entriesClearedState');
+
+            if (alertsClearedState) {
+                alertsClearedState.classList.toggle('d-none', visibleAlerts);
+            }
+            if (entriesClearedState) {
+                entriesClearedState.classList.toggle('d-none', visibleEntries);
+            }
+
+            updateModalCounters();
+        }
         
         function toggleSidebar() {
             sidebar.classList.toggle('active');
@@ -733,6 +1038,74 @@
             hamburgerIcon.classList.remove('bi-x-lg');
             hamburgerIcon.classList.add('bi-list');
         }
+
+        if (markAllReadBtn) {
+            markAllReadBtn.addEventListener('click', async () => {
+                const unreadItems = getUnreadItems().filter(item => item.style.display !== 'none');
+                const saved = await persistNotificationState('read', unreadItems);
+                if (!saved) {
+                    return;
+                }
+
+                unreadItems.forEach(item => {
+                    item.classList.remove('unread-notify');
+                    item.classList.add('read-notify');
+                });
+
+                updateModalCounters();
+                updateSidebarNotificationBadge();
+            });
+        }
+
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', async () => {
+                const visibleItems = getNotificationItems().filter(item => item.style.display !== 'none');
+                const saved = await persistNotificationState('clear', visibleItems);
+                if (!saved) {
+                    return;
+                }
+
+                visibleItems.forEach(item => {
+                    item.style.display = 'none';
+                });
+
+                showClearedStateIfNeeded();
+                updateSidebarNotificationBadge();
+            });
+        }
+
+        document.addEventListener('click', async (event) => {
+            const clearButton = event.target.closest('[data-notify-action="clear"]');
+            if (clearButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                await clearNotification(clearButton.closest('.notify-modal-item'));
+                return;
+            }
+
+            const notificationItem = event.target.closest('.notify-modal-item[data-notify-key]');
+            if (!notificationItem || notificationItem.style.display === 'none') {
+                return;
+            }
+
+            if (event.target.closest('a, button')) {
+                return;
+            }
+
+            await markNotificationRead(notificationItem);
+        });
+
+        document.addEventListener('keydown', async (event) => {
+            const notificationItem = event.target.closest('.notify-modal-item[data-notify-key]');
+            if (!notificationItem || notificationItem.style.display === 'none') {
+                return;
+            }
+
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                await markNotificationRead(notificationItem);
+            }
+        });
 
         setTimeout(() => {
             if (alert) {
@@ -763,6 +1136,10 @@
                 closeSidebar();
             }
         });
+
+        showClearedStateIfNeeded();
+        updateSidebarNotificationBadge();
+        updateModalCounters();
     </script>
     
     {% block extra_js %}{% endblock %}

@@ -374,6 +374,12 @@
                 {% else %}
                     | Daily Report View
                 {% endif %}
+                {% if selected_student_name %}
+                    | Student: {{ selected_student_name }}
+                {% endif %}
+                {% if selected_department_name %}
+                    | Department: {{ selected_department_name }}
+                {% endif %}
             </p>
         </div>
         <div class="d-flex gap-2">
@@ -402,6 +408,17 @@
             </span>
             <h3><i class="bi bi-building me-2"></i>Smart Attendance System</h3>
             <p class="subtitle">Attendance Report: {{ date_from }} - {{ date_to }}</p>
+            {% if selected_student_name or selected_department_name %}
+            <p class="subtitle mb-0">
+                {% if selected_student_name %}
+                    <span><i class="bi bi-person-fill me-1"></i>{{ selected_student_name }}</span>
+                {% endif %}
+                {% if selected_department_name %}
+                    {% if selected_student_name %} | {% endif %}
+                    <span><i class="bi bi-building me-1"></i>{{ selected_department_name }}</span>
+                {% endif %}
+            </p>
+            {% endif %}
         </div>
         <div class="col-md-4 text-md-end">
             <div class="fs-2 fw-bold">{{ total_records }}</div>
@@ -471,7 +488,7 @@
                 <span><span class="dot denied"></span>Denied students</span>
             </div>
             {% if daily_stats %}
-                {% for item in daily_stats|slice:"-10:" %}
+                {% for item in daily_stats|slice:"-10:" reversed %}
                 <div class="bar-row">
                     <div class="bar-label">
                         <span>{{ item.timestamp__date|date:"M d" }}</span>

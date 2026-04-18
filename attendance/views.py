@@ -24,7 +24,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import Student, Attendance, SystemLog, Department
+from .models import Student, Attendance, SystemLog, Department, NotificationState
 from .services.face_recognition_service import (
     get_face_recognition_service,
 )
@@ -54,6 +54,57 @@ def get_student_for_user(user):
         return Student.objects.get(user=user)
     except Student.DoesNotExist:
         return None
+
+
+def _get_user_alert_queryset(user):
+    """Alerts visible to a user for notification modal."""
+    alerts_qs = SystemLog.objects.filter(log_type__in=['warning', 'error'])
+    if user.is_staff or user.is_superuser:
+        return alerts_qs
+
+    student_profile = getattr(user, 'student_profile', None)
+    alert_terms = [user.username]
+    if student_profile and student_profile.name:
+        alert_terms.append(student_profile.name)
+
+    alert_filter = Q()
+    for term in alert_terms:
+        if term:
+            alert_filter |= Q(message__icontains=term)
+
+    return alerts_qs.filter(alert_filter)
+
+
+def _can_access_notification(user, notification_type, object_id):
+    """Ensure users can only mutate notification states they are allowed to see."""
+    if notification_type == 'alert':
+        return _get_user_alert_queryset(user).filter(pk=object_id).exists()
+
+    if notification_type == 'entry':
+        attendance_qs = Attendance.objects.all() if is_admin(user) else Attendance.objects.filter(student__user=user)
+        return attendance_qs.filter(pk=object_id).exists()
+
+    return False
+
+
+def _parse_notification_key(raw_key):
+    """Parse `alert-123` / `entry-456` style key."""
+    if not isinstance(raw_key, str) or '-' not in raw_key:
+        return None, None
+
+    notification_type, object_id_str = raw_key.split('-', 1)
+    if notification_type not in {'alert', 'entry'}:
+        return None, None
+
+    try:
+        object_id = int(object_id_str)
+    except (TypeError, ValueError):
+        return None, None
+
+    if object_id <= 0:
+        return None, None
+
+    return notification_type, object_id
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1045,6 +1096,7 @@ def reports(request):
     """
     context = {
         'students': Student.objects.filter(is_active=True).order_by('name'),
+        'departments': Department.objects.filter(is_active=True).order_by('name'),
     }
     return render(request, 'attendance/reports.html', context)
 
@@ -1062,6 +1114,7 @@ def generate_report(request):
     date_from = request.POST.get('date_from', '')
     date_to = request.POST.get('date_to', '')
     student_id = request.POST.get('student', '')
+    department_id = request.POST.get('department', '')
     format_type = request.POST.get('format', 'html')
     
     records = Attendance.objects.select_related('student')
@@ -1083,9 +1136,26 @@ def generate_report(request):
     if student_id:
         records = records.filter(student_id=student_id)
 
+    if department_id:
+        records = records.filter(student__department_id=department_id)
+
+    selected_student_name = ''
+    if student_id:
+        selected_student = Student.objects.filter(pk=student_id).first()
+        if selected_student:
+            selected_student_name = selected_student.name
+
+    selected_department_name = ''
+    if department_id:
+        selected_department = Department.objects.filter(pk=department_id).first()
+        if selected_department:
+            selected_department_name = selected_department.name
+
     student_scope = Student.objects.filter(is_active=True)
     if student_id:
         student_scope = student_scope.filter(pk=student_id)
+    if department_id:
+        student_scope = student_scope.filter(department_id=department_id)
     
     records = records.order_by('-timestamp')
 
@@ -1130,6 +1200,8 @@ def generate_report(request):
         'max_daily_students': max_daily_students,
         'date_from': date_from,
         'date_to': date_to,
+        'selected_student_name': selected_student_name,
+        'selected_department_name': selected_department_name,
         'total_records': total_records,
         'total_success': total_success,
         'total_denied': total_denied,
@@ -1228,6 +1300,53 @@ def system_logs(request):
 # ═══════════════════════════════════════════════════════════════════
 # API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
+
+@login_required(login_url='login')
+@require_http_methods(["POST"])
+def notification_state_api(request):
+    """Persist read/clear notification state for the current user."""
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON payload'}, status=400)
+
+    action = payload.get('action')
+    keys = payload.get('keys', [])
+    if action not in {'read', 'clear'}:
+        return JsonResponse({'success': False, 'error': 'Unsupported action'}, status=400)
+    if not isinstance(keys, list):
+        return JsonResponse({'success': False, 'error': 'keys must be a list'}, status=400)
+
+    updated_count = 0
+    for raw_key in set(keys):
+        notification_type, object_id = _parse_notification_key(raw_key)
+        if not notification_type:
+            continue
+        if not _can_access_notification(request.user, notification_type, object_id):
+            continue
+
+        state, _ = NotificationState.objects.get_or_create(
+            user=request.user,
+            notification_type=notification_type,
+            object_id=object_id,
+        )
+
+        if action == 'read':
+            if state.is_cleared:
+                continue
+            if not state.is_read:
+                state.is_read = True
+                state.save(update_fields=['is_read', 'updated_at'])
+                updated_count += 1
+            continue
+
+        if not state.is_cleared or not state.is_read:
+            state.is_cleared = True
+            state.is_read = True
+            state.save(update_fields=['is_cleared', 'is_read', 'updated_at'])
+            updated_count += 1
+
+    return JsonResponse({'success': True, 'updated': updated_count})
 
 @csrf_exempt
 def api_dashboard_stats(request):

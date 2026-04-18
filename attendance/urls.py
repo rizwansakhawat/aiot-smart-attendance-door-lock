@@ -34,4 +34,5 @@ urlpatterns = [
     path('api/capture-face/', views.capture_face_api, name='capture_face_api'),
     path('api/check-camera/', views.check_camera_api, name='check_camera_api'),
     path('api/dashboard-stats/', views.api_dashboard_stats, name='api_dashboard_stats'),
+    path('api/notification-state/', views.notification_state_api, name='notification_state_api'),
 ]

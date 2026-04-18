@@ -53,6 +53,22 @@
         max-width: 400px;
         word-wrap: break-word;
     }
+
+    .log-image-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        font-size: 0.84rem;
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .log-image-link:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+    }
     
     .filter-pills {
         display: flex;
@@ -132,7 +148,16 @@
                             {{ log.log_type }}
                         </span>
                     </td>
-                    <td class="log-message">{{ log.message }}</td>
+                    <td class="log-message">
+                        {{ log.message }}
+                        {% if log.image_url %}
+                            <div>
+                                <a href="{{ log.image_url }}" target="_blank" rel="noopener noreferrer" class="log-image-link">
+                                    <i class="bi bi-image"></i>View unknown snapshot
+                                </a>
+                            </div>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

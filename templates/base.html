@@ -40,8 +40,10 @@
             background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f1419 100%);
             padding: 0;
             z-index: 1000;
-            overflow-y: auto;
+            overflow: hidden;
             box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
         }
         
         .sidebar::-webkit-scrollbar {
@@ -82,8 +84,102 @@
         
         .sidebar-menu {
             list-style: none;
-            padding: 15px 12px 180px 12px;
+            padding: 15px 12px 16px 12px;
             margin: 0;
+            flex: 1 1 auto;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .sidebar-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-menu::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-menu::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-user-section {
+            flex: 0 0 auto;
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%);
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar-user-profile {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            text-decoration: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-user-profile:hover {
+            opacity: 0.85;
+        }
+
+        .sidebar-user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #4361ee, #3f37c9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-right: 12px;
+            box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .sidebar-user-meta {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar-user-name {
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-user-role {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.75rem;
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(46, 196, 182, 0.2);
+            border-radius: 4px;
+            border: 1px solid rgba(46, 196, 182, 0.3);
+        }
+
+        .sidebar-user-role i {
+            font-size: 0.7rem;
+        }
+
+        .sidebar-logout-btn {
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .sidebar-logout-btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.5);
         }
         
         .sidebar-menu li {
@@ -568,12 +664,11 @@
             }
             
             .sidebar-menu {
-                padding-bottom: 200px;
+                padding-bottom: 16px;
             }
-            
-            /* Fixed bottom user section for mobile */
-            .sidebar .user-section-fixed {
-                width: 280px;
+
+            .sidebar-user-section {
+                width: 100%;
             }
         }
         
@@ -833,22 +928,22 @@
         </ul>
         
         {% if user.is_authenticated %}
-        <div style="position: fixed; bottom: 0; left: 0; width: 280px; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%); backdrop-filter: blur(10px); z-index: 1001;">
-            <a href="{% url 'user_profile' %}" class="d-flex align-items-center mb-3 text-decoration-none" style="transition: all 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #4361ee, #3f37c9); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.2rem; margin-right: 12px; box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3); border: 2px solid rgba(255,255,255,0.2);">
+        <div class="sidebar-user-section">
+            <a href="{% url 'user_profile' %}" class="sidebar-user-profile">
+                <div class="sidebar-user-avatar">
                     {{ user.username|slice:":1"|upper }}
                 </div>
-                <div style="flex: 1; overflow: hidden;">
-                    <div style="color: white; font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <div class="sidebar-user-meta">
+                    <div class="sidebar-user-name">
                         {{ user.get_full_name|default:user.username }}
                     </div>
-                    <small style="color: rgba(255,255,255,0.7); font-size: 0.75rem; display: inline-block; padding: 2px 8px; background: rgba(46, 196, 182, 0.2); border-radius: 4px; border: 1px solid rgba(46, 196, 182, 0.3);">
-                        <i class="bi bi-{% if user.is_staff %}shield-check{% else %}person{% endif %}" style="font-size: 0.7rem;"></i>
+                    <small class="sidebar-user-role">
+                        <i class="bi bi-{% if user.is_staff %}shield-check{% else %}person{% endif %}"></i>
                         {% if user.is_staff %}Admin{% else %}User{% endif %}
                     </small>
                 </div>
             </a>
-            <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm w-100" style="border-radius: 8px; padding: 10px; font-weight: 500; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.3);" onmouseover="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.5)';" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255,255,255,0.3)';">
+            <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm w-100 sidebar-logout-btn">
                 <i class="bi bi-box-arrow-left me-2"></i>Logout
             </a>
         </div>

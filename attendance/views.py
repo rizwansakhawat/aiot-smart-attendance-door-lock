@@ -1287,6 +1287,9 @@ def system_logs(request):
     paginator = Paginator(logs, 100)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+
+    for log in page_obj.object_list:
+        log.image_url = _resolve_log_image_url(log)
     
     context = {
         'page_obj': page_obj,
@@ -1295,6 +1298,62 @@ def system_logs(request):
     }
     
     return render(request, 'attendance/system_logs.html', context)
+
+
+def _resolve_log_image_url(log):
+    """Return a media URL for unknown-person log snapshots when available."""
+    if not log:
+        return None
+
+    message = (log.message or '').lower()
+    if 'unknown' not in message:
+        return None
+
+    details = (log.details or '').strip()
+    if not details:
+        return None
+
+    image_exts = ('.jpg', '.jpeg', '.png', '.webp', '.gif')
+    details_lower = details.lower()
+    if not details_lower.endswith(image_exts):
+        return None
+
+    media_url = str(settings.MEDIA_URL).rstrip('/') + '/'
+
+    if details.startswith(str(settings.MEDIA_URL)):
+        return details
+
+    normalized = os.path.normpath(details)
+    candidates = []
+
+    if os.path.isabs(normalized):
+        candidates.append(normalized)
+    else:
+        candidates.append(os.path.normpath(os.path.join(str(settings.BASE_DIR), normalized)))
+        candidates.append(os.path.normpath(os.path.join(str(settings.MEDIA_ROOT), normalized)))
+
+        if details.startswith('media/') or details.startswith('media\\'):
+            relative = details[6:].replace('\\', '/').lstrip('/')
+            return f"{media_url}{relative}"
+
+    media_root_norm = os.path.normpath(str(settings.MEDIA_ROOT))
+
+    for file_path in candidates:
+        if not os.path.isfile(file_path):
+            continue
+
+        try:
+            relative = os.path.relpath(file_path, media_root_norm)
+        except ValueError:
+            continue
+
+        if relative.startswith('..'):
+            continue
+
+        relative_url = relative.replace('\\', '/')
+        return f"{media_url}{relative_url}"
+
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════

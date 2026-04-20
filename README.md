@@ -1,111 +1,82 @@
 # AIoT Smart Attendance Door Lock
 
-An AIoT-based smart attendance and door lock system built with Django, face recognition, Arduino integration, and asynchronous notifications using Celery.
+An end-to-end AIoT access control and attendance platform built with Django, OpenCV face recognition, Arduino hardware control, and asynchronous notifications via Celery.
 
-## What This Project Does
+## Executive Overview
 
-This project connects a Python/Django web app with a camera, Arduino, and face recognition. It can:
+This project combines software intelligence and physical automation to deliver secure, auditable, and real-time entry control.
 
-- recognize registered students or staff from a live camera feed
-- mark attendance automatically
-- unlock a physical door through Arduino and a servo motor
-- show status on an LCD screen
-- send alerts when an unknown person is detected
-- let an admin control door modes from the web panel
+Core outcomes:
 
-## Features
+- automatic attendance marking for recognized users
+- real door unlock and lock control through Arduino and a servo motor
+- live visual status through LCD and LEDs
+- unknown-person alerting with snapshot capture
+- centralized control and monitoring from a web dashboard
 
-- Face-recognition-based attendance marking
-- Door control integration with Arduino
-- Student registration and management
-- Attendance reports and dashboards
-- Asynchronous notifications via Celery
-- Email and Telegram notification channels
+## End-to-End Flow
 
-## Hardware Used
+1. Video is captured from a connected camera.
+2. Face recognition matches the current face against registered identities.
+3. If a valid match is confirmed, the system:
+	 - records attendance
+	 - sends `UNLOCK:Name` to Arduino
+	 - opens the door and displays user feedback on LCD
+4. If the face remains unknown beyond the configured threshold, the system:
+	 - keeps access blocked
+	 - stores an image snapshot
+	 - raises admin alerts (email/Telegram)
+5. All outcomes are persisted through logs and attendance records for traceability.
+
+## System Capabilities
+
+- face-recognition-based attendance automation
+- Arduino-driven physical door control
+- live camera preview and operational modes from admin panel
+- unknown-person detection and alert pipeline
+- asynchronous notification delivery with Celery workers
+- reporting and operational visibility via Django dashboards
+
+## Hardware Layer
 
 - Arduino Uno
-- PIR motion sensor for motion-triggered mode
-- SG90 or similar servo motor for locking and unlocking
-- 16x2 I2C LCD for status messages
-- Green and red LEDs for door state indication
-- USB camera for face recognition
+- PIR motion sensor (for full motion-triggered mode)
+- SG90 (or equivalent) servo motor
+- 16x2 I2C LCD display
+- red/green status LEDs
+- USB camera
 
-## Arduino Integration
+## Arduino and Serial Protocol
 
-The Arduino sketch in [arduino_door_lock/arduino_door_lock.ino](arduino_door_lock/arduino_door_lock.ino) handles the physical side of the system:
+The Arduino firmware is located at [arduino_door_lock/arduino_door_lock.ino](arduino_door_lock/arduino_door_lock.ino).
 
-- reads PIR sensor motion
-- shows messages on the LCD
-- opens and closes the servo lock
-- turns LEDs on and off
-- listens for serial commands from Python
+Arduino responsibilities:
 
-Serial commands used by the project:
+- motion sensing (PIR)
+- servo actuation for lock/unlock
+- LCD feedback rendering
+- LED state control
+- serial communication with Python controller
 
-- `MOTION` - Arduino reports that motion was detected
-- `UNLOCK:Name` - Python tells Arduino to unlock the door and show the name
-- `LOCK` - close the door and return to waiting state
-- `DENIED` / `DENIED_HOLD` - show unauthenticated/blocked message
-- `IDLE` - return LCD to `Waiting for Motion...`
-- `PING` - connection test
+Primary serial commands:
 
-## Project Flow
-
-1. The camera detects a face or motion.
-2. Python compares the face against registered students.
-3. If the person is recognized, Python sends `UNLOCK:Name` to Arduino.
-4. Arduino unlocks the servo and shows the person's name on LCD.
-5. If the person is unknown, Python sends denial commands and saves a snapshot.
-6. Logs, attendance, and notifications are stored in Django.
+- `MOTION` - motion event emitted by Arduino
+- `UNLOCK:Name` - unlock door and show user name
+- `LOCK` - return to secure/locked state
+- `DENIED` and `DENIED_HOLD` - unauthorized access state
+- `IDLE` - restore waiting display
+- `PING` - connectivity check
 
 ## Operating Modes
 
 - Mode 1: Live View
-	- continuous face recognition only
+	- continuous recognition display only
 - Mode 2: Live Attendance
-	- attendance marking without Arduino
+	- attendance automation without Arduino dependency
 - Mode 3: Live Door Lock
-	- camera + Arduino door control without PIR
+	- continuous camera + Arduino control (no PIR trigger required)
 - Mode 4: Full Mode
-	- Arduino + camera + PIR motion trigger
-
-## How to Use
-
-### 1. Install dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
-### 2. Configure environment
-
-Create or update `.env` with database, email, Telegram, and secret key values.
-
-### 3. Run migrations
-
-```powershell
-py .\manage.py migrate
-```
-
-### 4. Upload Arduino sketch
-
-Open [arduino_door_lock/arduino_door_lock.ino](arduino_door_lock/arduino_door_lock.ino) in Arduino IDE and upload it to the board.
-
-### 5. Start Django server
-
-```powershell
-py .\manage.py runserver
-```
-
-### 6. Open the control panel
-
-Go to the Door Control panel and start the required mode.
-
-### 7. Use the system
-
-- For mode 3 or 4, the web panel can also send a manual `Open Door` command while the system is running.
-- If an unknown person stays in view, the system shows an unauthorized state and returns to idle when the face disappears.
+	- Arduino + camera + PIR-triggered recognition workflow
 
 ## Project Structure
 
@@ -117,14 +88,20 @@ aiot-smart-attendance-door-lock/
 │   │   └── notification_service.py
 │   ├── tasks.py
 │   └── ...
+├── door_control/
+│   ├── views.py
+│   ├── urls.py
+│   └── templates/door_control/control.html
 ├── smart_attendance_project/
 │   ├── settings.py
 │   ├── celery.py
 │   └── ...
-├── templates/
+├── arduino_door_lock/
+│   └── arduino_door_lock.ino
 ├── media/
+│   └── runtime/
 ├── door_system.py
-├── test_notifications.py
+├── manage.py
 ├── requirements.txt
 └── .env
 ```
@@ -133,15 +110,16 @@ aiot-smart-attendance-door-lock/
 
 - Python 3.10.11
 - Redis (local or Docker)
-- Windows 10/11 (tested)
+- Windows 10/11 (validated)
+- Arduino IDE (for firmware upload)
 
-## Setup
+## Installation and Setup
 
 1. Create and activate virtual environment.
 2. Install dependencies.
 3. Configure environment variables.
-4. Run migrations.
-5. Upload the Arduino sketch to the board.
+4. Run database migrations.
+5. Upload Arduino firmware.
 
 ```powershell
 python -m venv venv
@@ -152,9 +130,9 @@ python manage.py migrate
 
 ## Environment Configuration
 
-Use .env for all secrets and runtime settings.
+Use `.env` for secrets and runtime parameters.
 
-### SMTP (email)
+### SMTP (Email)
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
@@ -180,7 +158,7 @@ TELEGRAM_RETRY_DELAY_SECONDS=1
 TELEGRAM_FAIL_COOLDOWN_SECONDS=50
 ```
 
-### Celery
+### Celery / Redis
 
 ```env
 CELERY_BROKER_URL=redis://127.0.0.1:6379/0
@@ -188,25 +166,27 @@ CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
 CELERY_NOTIFICATIONS_ENABLED=True
 ```
 
-## Run Redis
+## Running the System
 
-### Docker
+### Start Redis
 
 ```powershell
 docker run -d --name redis -p 6379:6379 redis:7
 ```
 
-## Run Application
-
-### Django server
+### Start Django
 
 ```powershell
 python manage.py runserver
 ```
 
-### Full system runtime
+### Start Celery Worker (Windows)
 
-When you run `door_system.py`, it can operate in the following modes:
+```powershell
+celery -A smart_attendance_project worker -l info --pool=solo
+```
+
+### Start Door Runtime (Direct CLI)
 
 ```powershell
 py .\door_system.py 3
@@ -218,69 +198,44 @@ or
 py .\door_system.py 4
 ```
 
-Use mode 3 for Arduino door lock without PIR, and mode 4 for the full PIR-triggered setup.
+### Start Door Runtime (Web Panel)
 
-### Celery worker (Windows)
+Open the Door Control panel and start mode 3 or mode 4.
 
-```powershell
-celery -A smart_attendance_project worker -l info --pool=solo
-```
+Manual door open from panel:
 
-## Test Notifications
+- supported while mode 3 or 4 is active
+- sends an open command to the currently running door process
 
-Run notification test script:
+## Operational Notes
 
-```powershell
-py .\test_notifications.py
-```
+- Unknown-person states remain active while the unknown face is continuously visible.
+- Once the unknown face disappears, the system transitions back to idle waiting state.
+- All key events are logged for review in dashboards and system logs.
 
-Quick queue-only test:
-
-```powershell
-py .\test_notifications.py --no-wait
-```
-
-Increase result wait window if needed:
-
-```powershell
-$env:CELERY_TEST_TIMEOUT="180"
-py .\test_notifications.py
-```
-
-## Notification Behavior
-
-- If Telegram is disabled in settings, Telegram notifications are not sent.
-- If SMTP is unreachable, email fails quickly using EMAIL_TIMEOUT.
-- If Telegram repeatedly fails, cooldown prevents repeated long blocking attempts.
-
-## Common Troubleshooting
+## Troubleshooting
 
 ### Arduino not responding
 
-- Make sure the sketch is uploaded to the board.
-- Check that the correct COM port is available.
-- Close Arduino IDE or other serial tools if the port is busy.
+- confirm firmware upload to Arduino board
+- verify COM port availability
+- close any process holding serial port (Arduino IDE, monitor tools)
 
-### Door panel starts but manual open does nothing
+### Manual Open button does not unlock
 
-- Manual open only works when mode 3 or 4 is already running.
-- Start one of those modes from the control panel first.
+- ensure mode 3 or 4 is already running
+- ensure Arduino connection is healthy in the active runtime
 
-### Unknown person message keeps showing
+### Celery tasks remain pending
 
-- This is expected while the unknown face is still visible.
-- The screen returns to `Waiting for Motion...` once the face is no longer detected.
+- verify Redis is running
+- verify Celery worker is running
+- verify broker URL in environment variables
 
-### Tasks remain PENDING
+### SMTP timeout / WinError 10060
 
-- Make sure Redis is running.
-- Make sure Celery worker is running.
-- Check worker startup logs for broker URL.
-
-### Email timeout or WinError 10060
-
-- Usually network or VPN route is blocking SMTP ports.
-- Test connectivity:
+- verify SMTP route and network policy
+- test ports using:
 
 ```powershell
 Test-NetConnection smtp.gmail.com -Port 587
@@ -289,34 +244,32 @@ Test-NetConnection smtp.gmail.com -Port 465
 
 ### Telegram timeout
 
-- Usually network route blocks api.telegram.org.
-- Verify in browser: https://api.telegram.org
-- Use VPN if required by your network region.
+- verify outbound access to `api.telegram.org`
+- test with browser connectivity
+- use VPN if required by local network policy
 
-## Security Notes
+## Security Practices
 
-- Do not commit .env to source control.
-- Rotate credentials if they are ever exposed.
-- Prefer provider API keys over account passwords where possible.
+- never commit `.env` to source control
+- rotate exposed credentials immediately
+- prefer app passwords or scoped API keys over primary account credentials
 
 ## Useful Commands
 
 ```powershell
-# Start Redis
+# Redis
 docker run -d --name redis -p 6379:6379 redis:7
-
-# Restart Redis container
 docker restart redis
-
-# Stop and remove Redis container
 docker rm -f redis
 
-# Start Celery worker
+# Celery
 celery -A smart_attendance_project worker -l info --pool=solo
 
-# Run door system in Live Door Lock mode
+# Door runtime
 py .\door_system.py 3
-
-# Run door system in Full Mode
 py .\door_system.py 4
+
+# Notification tests
+py .\test_notifications.py
+py .\test_notifications.py --no-wait
 ```

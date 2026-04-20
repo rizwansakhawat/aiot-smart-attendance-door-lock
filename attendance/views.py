@@ -1306,7 +1306,11 @@ def _resolve_log_image_url(log):
         return None
 
     message = (log.message or '').lower()
-    if 'unknown' not in message:
+    # Check for either "unknown" or "pir motion detected" + "no known face" patterns
+    has_unknown = 'unknown' in message
+    has_pir_motion = ('pir motion detected' in message and 'no known face' in message)
+    
+    if not (has_unknown or has_pir_motion):
         return None
 
     details = (log.details or '').strip()

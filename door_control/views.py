@@ -27,6 +27,7 @@ DOOR_SYSTEM_MODES = {
 DOOR_STATE_FILE = os.path.join(settings.BASE_DIR, 'media', 'runtime', 'door_system_state.json')
 DOOR_FAILURE_FILE = os.path.join(settings.BASE_DIR, 'media', 'runtime', 'door_system_failure.json')
 DOOR_LOG_FILE = os.path.join(settings.BASE_DIR, 'media', 'runtime', 'door_system.log')
+DOOR_COMMAND_FILE = os.path.join(settings.BASE_DIR, 'media', 'runtime', 'door_system_command.json')
 
 
 def is_superuser_only(user):
@@ -258,6 +259,30 @@ def _stop_door_system():
     return True, f'Door system stopped (PID {pid}).'
 
 
+def _queue_open_door_command(username):
+    status = _door_status()
+    if not status['running']:
+        return False, 'Door system is not running.'
+
+    if status.get('mode') not in {'3', '4'}:
+        return False, 'Manual open is only available while mode 3 or 4 is running.'
+
+    _ensure_runtime_dir()
+    payload = {
+        'command': 'OPEN_DOOR',
+        'requested_by': username,
+        'requested_at': timezone.now().isoformat(),
+    }
+
+    try:
+        with open(DOOR_COMMAND_FILE, 'w', encoding='utf-8') as command_file:
+            json.dump(payload, command_file, ensure_ascii=True, indent=2)
+    except Exception as exc:
+        return False, f'Unable to queue manual open command: {exc}'
+
+    return True, 'Manual open command sent. Door will unlock if Arduino is connected.'
+
+
 @login_required(login_url='login')
 @user_passes_test(is_superuser_only, login_url='dashboard')
 def control_panel(request):
@@ -280,6 +305,8 @@ def control_action(request):
         ok, msg = _start_door_system(mode, request.user.username)
     elif action == 'stop':
         ok, msg = _stop_door_system()
+    elif action == 'open':
+        ok, msg = _queue_open_door_command(request.user.username)
     else:
         ok, msg = False, 'Invalid action.'
 

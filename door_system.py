@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import threading
+import json
 import cv2
 import numpy as np
 import face_recognition
@@ -79,6 +80,7 @@ FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOL
 LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 5))
 LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 30))
 LIVE_FALLBACK_MIN_INTERVAL_SECONDS = float(getattr(settings, 'LIVE_FALLBACK_MIN_INTERVAL_SECONDS', 2.5))
+DOOR_COMMAND_FILE = os.path.join(PROJECT_DIR, 'media', 'runtime', 'door_system_command.json')
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -122,6 +124,53 @@ def run_in_background(task_name, target, *args, **kwargs):
     thread = threading.Thread(target=_runner, daemon=True)
     thread.start()
     return thread
+
+
+def consume_runtime_command():
+    """Read and remove one pending runtime command sent from the control panel."""
+    if not os.path.exists(DOOR_COMMAND_FILE):
+        return None
+
+    data = None
+    try:
+        with open(DOOR_COMMAND_FILE, 'r', encoding='utf-8') as command_file:
+            raw = json.load(command_file)
+        if isinstance(raw, dict):
+            data = raw
+    except Exception:
+        data = None
+    finally:
+        try:
+            os.remove(DOOR_COMMAND_FILE)
+        except Exception:
+            pass
+
+    if not data:
+        return None
+
+    command = str(data.get('command') or '').strip().upper()
+    if not command:
+        return None
+
+    return {
+        'command': command,
+        'requested_by': data.get('requested_by'),
+    }
+
+
+def build_unlock_command(student_name=None):
+    """Build an Arduino UNLOCK command with an optional LCD-safe user name."""
+    if not student_name:
+        return "UNLOCK"
+
+    cleaned = ''.join(ch for ch in str(student_name) if 32 <= ord(ch) <= 126)
+    cleaned = cleaned.replace('|', ' ').replace(':', ' ').strip()
+
+    if not cleaned:
+        return "UNLOCK"
+
+    # 16 characters keeps the LCD second line clean on 16x2 displays.
+    return f"UNLOCK:{cleaned[:16]}"
 
 
 def save_attendance(student, entry_type='success', location='Main Door'):
@@ -734,6 +783,19 @@ class DoorSystem:
                     time.sleep(0.1)
                     continue
 
+                pending = consume_runtime_command()
+                if pending and pending.get('command') == 'OPEN_DOOR':
+                    requested_by = pending.get('requested_by') or 'admin'
+                    if self.conn.arduino_ok:
+                        self.conn.send_command(build_unlock_command('Manual Open'))
+                        message = f"Manual open executed in Full Mode by {requested_by}."
+                        print(f"\n🔓 {message}")
+                        log_system('info', message)
+                    else:
+                        message = f"Manual open request ignored (Arduino offline) by {requested_by}."
+                        print(f"\n⚠️ {message}")
+                        log_system('warning', message)
+
                 if self.require_arduino:
                     msg = self.conn.read_arduino()
                     if msg and "MOTION" in msg:
@@ -780,7 +842,7 @@ class DoorSystem:
                             print("  │  ➡️  Sending UNLOCK command to Arduino   │")
                             print("  │  🔓 DOOR UNLOCKED                        │")
                             print("  └──────────────────────────────────────────┘")
-                            self.conn.send_command("UNLOCK")
+                            self.conn.send_command(build_unlock_command(student.name))
                             save_attendance(student)
 
                             last_result_text = f"ACCESS GRANTED: {student.name}"
@@ -912,7 +974,7 @@ class DoorSystem:
             print("  │  ➡️  Sending UNLOCK command to Arduino   │")
             print("  │  🔓 DOOR UNLOCKED                        │")
             print("  └──────────────────────────────────────────┘")
-            self.conn.send_command("UNLOCK")
+            self.conn.send_command(build_unlock_command(recognized_student.name))
             print()
             save_attendance(recognized_student)
         else:
@@ -1239,6 +1301,7 @@ def live_camera_attendance():
     last_unknown_alert_time = 0
     last_unknown_frame = None
     last_fallback_detection_time = 0
+    unauthorized_active = False
     
     # Status messages (shown at bottom)
     status_messages = []
@@ -1613,7 +1676,7 @@ def live_camera_door_lock():
     # SETTINGS
     # ─────────────────────────────────────────────────────────────
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds
-    UNLOCK_DURATION = 5             # Keep door unlocked for 5 seconds
+    UNLOCK_DURATION = 6             # Keep door unlocked for 6 seconds
     PERSON_COOLDOWN = 5             # Wait 5 seconds before unlocking for same person again
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
     DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
@@ -1710,6 +1773,7 @@ def live_camera_door_lock():
     last_unknown_alert_time = 0
     last_unknown_frame = None
     last_fallback_detection_time = 0
+    unauthorized_active = False
     
     # Status messages
     status_messages = []
@@ -1718,6 +1782,21 @@ def live_camera_door_lock():
     try:
         while True:
             current_time = time.time()
+
+            pending = consume_runtime_command()
+            if pending and pending.get('command') == 'OPEN_DOOR':
+                requested_by = pending.get('requested_by') or 'admin'
+                if conn.arduino_ok:
+                    conn.send_command(build_unlock_command('Manual Open'))
+                    door_is_unlocked = True
+                    door_unlock_time = current_time
+                    status_messages = [f"🔓 Manual door open by {requested_by}"]
+                    status_time = current_time
+                    print(f"\n🔓 Manual open requested by {requested_by}")
+                    log_system('info', f'Manual open executed in Live Door Lock by {requested_by}.')
+                else:
+                    print(f"\n⚠️ Manual open ignored: Arduino disconnected ({requested_by})")
+                    log_system('warning', f'Manual open ignored (Arduino offline) by {requested_by}.')
             
             # ─────────────────────────────────────────────────
             # Auto-lock door after UNLOCK_DURATION
@@ -1878,9 +1957,10 @@ def live_camera_door_lock():
                                             
                                             if current_time - last_unlock >= PERSON_COOLDOWN:
                                                 # UNLOCK DOOR
-                                                conn.send_command("UNLOCK")
+                                                conn.send_command(build_unlock_command(name))
                                                 door_is_unlocked = True
                                                 door_unlock_time = current_time
+                                                unauthorized_active = False
                                                 session_unlocks += 1
                                                 
                                                 recent_unlocks[student.id] = current_time
@@ -1946,10 +2026,15 @@ def live_camera_door_lock():
                                     f"{LIVE_UNKNOWN_ALERT_SECONDS:.0f}s"
                                 )
                             )
+                            conn.send_command("DENIED_HOLD")
+                            unauthorized_active = True
                             last_unknown_alert_time = current_time
                             unknown_start_time = current_time
-                            status_messages.append("⚠️ Unknown person alert sent")
+                            status_messages.append("⚠️ Unauthenticated user detected")
                     else:
+                        if unauthorized_active:
+                            conn.send_command("IDLE")
+                            unauthorized_active = False
                         unknown_start_time = None
                     
                     if not face_locations:
@@ -2012,7 +2097,11 @@ def live_camera_door_lock():
             # ─────────────────────────────────────────────────
             # Draw status messages
             # ─────────────────────────────────────────────────
-            if status_messages and (current_time - status_time < 3):
+            if unauthorized_active and not door_is_unlocked:
+                cv2.rectangle(display, (0, h - 55), (w, h), (0, 0, 220), -1)
+                cv2.putText(display, "UNAUTHORIZED - ACCESS BLOCKED", 
+                           (15, h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+            elif status_messages and (current_time - status_time < 3):
                 msg_height = 35 * len(status_messages) + 15
                 cv2.rectangle(display, (0, h - msg_height), (w, h), (50, 50, 50), -1)
                 

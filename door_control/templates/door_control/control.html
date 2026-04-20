@@ -479,6 +479,16 @@
                     </button>
                 </form>
 
+                {% if door_system_status.mode == '3' or door_system_status.mode == '4' %}
+                    <form method="post" action="{% url 'door_control_action' %}" class="mt-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="open">
+                        <button type="submit" class="btn mode-action" style="background: linear-gradient(135deg, #0ea5e9, #2563eb); box-shadow: 0 10px 18px rgba(37, 99, 235, 0.16); width: 100%;">
+                            <i class="bi bi-unlock-fill me-1"></i>Open Door (Manual)
+                        </button>
+                    </form>
+                {% endif %}
+
                 <div class="log-links">
                     <div class="log-link"><span><i class="bi bi-journal-text me-2"></i>Log file</span><span>media/runtime/door_system.log</span></div>
                     <div class="log-link"><span><i class="bi bi-file-earmark-binary me-2"></i>State file</span><span>media/runtime/door_system_state.json</span></div>

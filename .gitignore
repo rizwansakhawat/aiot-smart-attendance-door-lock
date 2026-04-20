@@ -47,3 +47,7 @@ test_django_camera.py
 .env
 /.env
 
+uv.lock
+test_notifications.py
+pyproject.toml
+.python-version

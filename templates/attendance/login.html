@@ -134,6 +134,19 @@
             color: #ce2d40;
             font-size: 0.95rem;
             line-height: 1.35;
+            opacity: 1;
+            max-height: 160px;
+            transition: opacity 0.35s ease, transform 0.35s ease, margin 0.35s ease, padding 0.35s ease, max-height 0.35s ease;
+        }
+
+        .message.hide {
+            opacity: 0;
+            transform: translateY(-6px);
+            max-height: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            overflow: hidden;
         }
 
         .message svg {
@@ -407,6 +420,19 @@
             eyeOpen.style.display = isHidden ? "none" : "block";
             eyeClosed.style.display = isHidden ? "block" : "none";
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const alerts = document.querySelectorAll('.message');
+
+            alerts.forEach(function (alertEl) {
+                setTimeout(function () {
+                    alertEl.classList.add('hide');
+                    setTimeout(function () {
+                        alertEl.remove();
+                    }, 380);
+                }, 4000);
+            });
+        });
     </script>
 </body>
 </html>

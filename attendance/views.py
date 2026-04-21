@@ -872,7 +872,7 @@ def student_list(request):
     user_type = request.GET.get('user_type', '')
     status = request.GET.get('status', '')
     
-    students = Student.objects.all().order_by('-registered_at')
+    students = Student.objects.all().order_by('registered_at')
     
     if search:
         students = students.filter(

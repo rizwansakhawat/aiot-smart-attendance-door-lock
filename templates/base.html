@@ -8,10 +8,10 @@
     <title>{% block title %}Smart Attendance System{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
-    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     
     <!-- Bootstrap Icons -->
-    <link href="{% static 'vendor/bootstrap-icons/font/bootstrap-icons.css' %}" rel="stylesheet">
+    <link href="{% static 'bootstrap-icons/font/bootstrap-icons.css' %}" rel="stylesheet">
     
     <style>
         :root {
@@ -471,13 +471,20 @@
         .notify-tools {
             display: flex;
             gap: 8px;
-            margin-right: 8px;
+            flex-wrap: wrap;
         }
 
         .notify-tools .btn {
             padding: 4px 10px;
             font-size: 0.75rem;
             border-radius: 8px;
+        }
+
+        .notify-header-controls {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .notify-modal-item:last-child {
@@ -973,13 +980,13 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="notificationsModalLabel"><i class="bi bi-bell-fill text-warning"></i> Notification Details</h5>
-                    <div class="d-flex align-items-center">
-                        <div class="notify-tools">
-                            <button type="button" class="btn btn-outline-primary" id="markAllReadBtn">Mark all read</button>
-                            <button type="button" class="btn btn-outline-danger" id="clearAllBtn">Clear all</button>
+                        <div class="notify-header-controls">
+                            <div class="notify-tools">
+                                <button type="button" class="btn btn-outline-primary" id="markAllReadBtn">Mark all read</button>
+                                <button type="button" class="btn btn-outline-danger" id="clearAllBtn">Clear all</button>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
                 </div>
                 <div class="modal-body">
                     {% include 'attendance/notification_details.html' %}
@@ -990,7 +997,7 @@
     {% endif %}
     
     <!-- Bootstrap JS -->
-    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     
     <!-- Mobile Navigation Script -->
     <script>

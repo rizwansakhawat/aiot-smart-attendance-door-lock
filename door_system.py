@@ -77,6 +77,11 @@ RECONNECT_WAIT_TIME = 2  # Wait 2 seconds between attempts
 FULL_MODE_RECOGNITION_INTERVAL = float(getattr(settings, 'FULL_MODE_RECOGNITION_INTERVAL', 0.4))
 FULL_MODE_MOTION_TIMEOUT_SECONDS = float(getattr(settings, 'FULL_MODE_MOTION_TIMEOUT_SECONDS', 10))
 FULL_MODE_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_ALERT_COOLDOWN_SECONDS', 30))
+FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS = float(getattr(settings, 'FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS', 30))
+FULL_MODE_UNKNOWN_PERSIST_GRACE_SECONDS = float(getattr(settings, 'FULL_MODE_UNKNOWN_PERSIST_GRACE_SECONDS', 2.0))
+FULL_MODE_PERSON_COOLDOWN_SECONDS = float(getattr(settings, 'FULL_MODE_PERSON_COOLDOWN_SECONDS', 6))
+LIVE_DOOR_UNLOCK_DURATION_SECONDS = float(getattr(settings, 'LIVE_DOOR_UNLOCK_DURATION_SECONDS', 6))
+LIVE_DOOR_PERSON_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_DOOR_PERSON_COOLDOWN_SECONDS', 2))
 LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 5))
 LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 30))
 LIVE_FALLBACK_MIN_INTERVAL_SECONDS = float(getattr(settings, 'LIVE_FALLBACK_MIN_INTERVAL_SECONDS', 2.5))
@@ -251,30 +256,18 @@ def notify_unknown_alert(frame=None, reason='Unknown person detected'):
 
     return False
 
-# def save_attendance(student, entry_type='success'):
-#     """Save attendance record"""
-#     try:
-#         today = timezone.now().date()
-#         existing = Attendance.objects.filter(
-#             student=student,
-#             timestamp__date=today,
-#             entry_type='success'
-#         ).exists()
-        
-#         if existing:
-#             print(f"   ℹ️ {student.name} already marked today")
-#             return False
-        
-#         Attendance.objects.create(
-#             student=student,
-#             entry_type=entry_type,
-#             location='Main Door'
-#         )
-#         log_system('success', f"Attendance saved: {student.name}")
-#         return True
-#     except Exception as e:
-#         log_system('error', f"Attendance error: {e}")
-#         return False
+
+def print_access_granted_block(student_name, confidence):
+    """Print a consistent ACCESS GRANTED block in terminal logs."""
+    print("\n  ╔════════════════════════════════════════════╗")
+    print(f"  ║  ✅ ACCESS GRANTED: {student_name[:25].ljust(25)}║")
+    print("  ╚════════════════════════════════════════════╝")
+    print(f"  📊 Final Confidence: {confidence:.1%}")
+    print()
+    print("  ┌──────────────────────────────────────────┐")
+    print("  │  ➡️  Sending UNLOCK command to Arduino   │")
+    print("  │  🔓 DOOR UNLOCKED                        │")
+    print("  └──────────────────────────────────────────┘")
 
 
 def print_error_box(title, message):
@@ -715,7 +708,11 @@ class DoorSystem:
 
         if NOTIFICATIONS_AVAILABLE:
             try:
-                NotificationService.notify_unknown_person(filepath)
+                run_in_background(
+                    'full mode motion timeout alert',
+                    NotificationService.notify_unknown_person,
+                    filepath,
+                )
             except Exception as e:
                 print(f"   ⚠️ Admin alert failed: {e}")
 
@@ -723,7 +720,7 @@ class DoorSystem:
             self.conn.send_command("DENIED")
 
     def run_full_mode_live(self):
-        """Full mode with live camera preview, PIR-triggered recognition, and admin alerts."""
+        """Full mode with continuous recognition and PIR-triggered unknown-person alerts."""
         if not self.initialize():
             print("\n❌ Cannot start - initialization failed!")
             return
@@ -736,18 +733,27 @@ class DoorSystem:
         print("  🎥 FULL MODE - LIVE CAMERA + PIR")
         print("═" * 58)
         print(f"  • Motion timeout: {FULL_MODE_MOTION_TIMEOUT_SECONDS:.0f} seconds")
-        print("  • Known face = gate unlocks")
-        print("  • No known face = admin alert after timeout")
+        print("  • Camera recognition runs continuously")
+        print("  • PIR starts unknown-face timeout window")
+        print("  • Known face = gate unlocks immediately")
+        print("  • PIR window timeout with no known face = admin alert")
         print("═" * 58 + "\n")
 
         cv2.namedWindow('Full Mode', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Full Mode', 1000, 750)
 
-        motion_active = False
+        pir_window_active = False
         motion_deadline = 0
         recognition_votes = {}
+        recent_unlocks = {}
         last_recognition_time = 0
-        last_result_text = "Waiting for motion..."
+        detected_faces = []
+        first_timeout_alert_sent = False
+        unknown_visible_since = 0
+        unknown_last_seen_time = 0
+        detection_scale = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
+        detection_upsample = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
+        last_result_text = "Continuous scanning active..."
         last_result_color = (180, 180, 180)
         result_time = 0
         status_messages = []
@@ -799,12 +805,14 @@ class DoorSystem:
                 if self.require_arduino:
                     msg = self.conn.read_arduino()
                     if msg and "MOTION" in msg:
-                        if not motion_active:
-                            recognition_votes = {}
-                            print("\n📡 [ARDUINO] 🚶 PIR Motion Detected!")
-                        motion_active = True
+                        recognition_votes = {}
+                        pir_window_active = True
+                        first_timeout_alert_sent = False
+                        unknown_visible_since = 0
+                        unknown_last_seen_time = 0
                         motion_deadline = current_time + FULL_MODE_MOTION_TIMEOUT_SECONDS
-                        status_messages = [f"🚶 Motion detected - scanning for {FULL_MODE_MOTION_TIMEOUT_SECONDS:.0f}s"]
+                        print("\n📡 [ARDUINO] 🚶 PIR Motion Detected!")
+                        status_messages = [f"🚶 Motion detected - awaiting known face for {FULL_MODE_MOTION_TIMEOUT_SECONDS:.0f}s"]
                         status_time = current_time
 
                 frame = self.conn.capture_frame()
@@ -822,10 +830,89 @@ class DoorSystem:
                 display = frame.copy()
                 h, w = display.shape[:2]
 
-                if motion_active and current_time - last_recognition_time >= FULL_MODE_RECOGNITION_INTERVAL:
-                    student, confidence = self.recognize_face(frame)
+                if current_time - last_recognition_time >= FULL_MODE_RECOGNITION_INTERVAL:
+                    detected_faces = []
+                    student = None
+                    confidence = 0
+
+                    try:
+                        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        small_frame = cv2.resize(rgb_frame, (0, 0), fx=detection_scale, fy=detection_scale)
+                        scale_back = 1.0 / detection_scale
+
+                        face_locations = face_recognition.face_locations(
+                            small_frame,
+                            model='hog',
+                            number_of_times_to_upsample=detection_upsample
+                        )
+
+                        if face_locations:
+                            face_encodings = face_recognition.face_encodings(small_frame, face_locations)
+
+                            best_student = None
+                            best_confidence = 0
+
+                            for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+                                top = int(top * scale_back)
+                                right = int(right * scale_back)
+                                bottom = int(bottom * scale_back)
+                                left = int(left * scale_back)
+
+                                face_name = "Unknown"
+                                face_color = (0, 0, 255)
+                                face_conf = 0
+
+                                if self.face_service.known_face_encodings:
+                                    distances = face_recognition.face_distance(
+                                        self.face_service.known_face_encodings,
+                                        face_encoding
+                                    )
+
+                                    if len(distances) > 0:
+                                        best_idx = int(np.argmin(distances))
+                                        best_distance = float(distances[best_idx])
+                                        sorted_distances = np.sort(distances)
+                                        second_best = float(sorted_distances[1]) if len(sorted_distances) > 1 else 1.0
+                                        distance_gap = second_best - best_distance
+                                        is_separated = len(sorted_distances) == 1 or distance_gap >= MATCH_SEPARATION_MARGIN
+
+                                        if best_distance <= RECOGNITION_TOLERANCE and is_separated:
+                                            candidate = self.face_service.known_students[best_idx]
+                                            candidate_conf = 1 - best_distance
+                                            face_name = candidate.name
+                                            face_conf = candidate_conf
+
+                                            if candidate_conf >= MIN_MATCH_CONFIDENCE:
+                                                face_color = (0, 255, 0)
+                                            else:
+                                                face_color = (0, 165, 255)
+
+                                            if candidate_conf >= MIN_MATCH_CONFIDENCE and candidate_conf > best_confidence:
+                                                best_student = candidate
+                                                best_confidence = candidate_conf
+
+                                detected_faces.append({
+                                    'name': face_name,
+                                    'location': (top, right, bottom, left),
+                                    'color': face_color,
+                                    'confidence': face_conf,
+                                })
+
+                            student = best_student
+                            confidence = best_confidence
+
+                    except Exception as e:
+                        print(f"  ❌ Full Mode detect error: {e}")
 
                     if student:
+                        last_unlock = recent_unlocks.get(student.id, 0)
+                        if current_time - last_unlock < FULL_MODE_PERSON_COOLDOWN_SECONDS:
+                            remaining = int(FULL_MODE_PERSON_COOLDOWN_SECONDS - (current_time - last_unlock))
+                            status_messages = [f"⏳ {student.name} cooldown ({remaining}s)"]
+                            status_time = current_time
+                            last_recognition_time = current_time
+                            continue
+
                         votes = recognition_votes.get(student.id, 0) + 1
                         recognition_votes[student.id] = votes
                         print(f"  ✅ Recognized: {student.name}")
@@ -833,57 +920,121 @@ class DoorSystem:
                         print(f"  🔎 Confirmation: {votes}/{REQUIRED_CONFIRM_FRAMES}")
 
                         if votes >= REQUIRED_CONFIRM_FRAMES:
-                            print("\n  ╔════════════════════════════════════════════╗")
-                            print(f"  ║  ✅ ACCESS GRANTED: {student.name[:25].ljust(25)}║")
-                            print("  ╚════════════════════════════════════════════╝")
-                            print(f"  📊 Final Confidence: {confidence:.1%}")
-                            print()
-                            print("  ┌──────────────────────────────────────────┐")
-                            print("  │  ➡️  Sending UNLOCK command to Arduino   │")
-                            print("  │  🔓 DOOR UNLOCKED                        │")
-                            print("  └──────────────────────────────────────────┘")
+                            print_access_granted_block(student.name, confidence)
                             self.conn.send_command(build_unlock_command(student.name))
                             save_attendance(student)
+                            recent_unlocks[student.id] = current_time
 
                             last_result_text = f"ACCESS GRANTED: {student.name}"
                             last_result_color = (0, 200, 0)
                             result_time = current_time
-                            motion_active = False
+                            pir_window_active = False
+                            first_timeout_alert_sent = False
+                            unknown_visible_since = 0
+                            unknown_last_seen_time = 0
                             motion_deadline = 0
                             recognition_votes = {}
                             status_messages = [f"✅ ACCESS GRANTED: {student.name}"]
                             status_time = current_time
                     else:
-                        print("  ❌ Face not recognized")
+                        if pir_window_active:
+                            print("  ❌ Face not recognized")
+
+                    if pir_window_active:
+                        # Treat any visible-but-unverified face as unknown persistence.
+                        unverified_face_visible = bool(detected_faces) and student is None
+                        if unverified_face_visible:
+                            if unknown_visible_since <= 0:
+                                unknown_visible_since = current_time
+                            unknown_last_seen_time = current_time
+                        else:
+                            if (
+                                unknown_last_seen_time > 0 and
+                                (current_time - unknown_last_seen_time) > FULL_MODE_UNKNOWN_PERSIST_GRACE_SECONDS
+                            ):
+                                unknown_visible_since = 0
+                                unknown_last_seen_time = 0
 
                     last_recognition_time = current_time
 
-                if motion_active and current_time >= motion_deadline:
-                    if current_time - self.last_motion_alert_time >= FULL_MODE_ALERT_COOLDOWN_SECONDS:
+                if pir_window_active and current_time >= motion_deadline:
+                    if not first_timeout_alert_sent:
                         self._send_motion_timeout_alert(frame, FULL_MODE_MOTION_TIMEOUT_SECONDS)
                         self.last_motion_alert_time = current_time
+                        first_timeout_alert_sent = True
                         last_result_text = "ADMIN ALERT SENT"
                         last_result_color = (0, 0, 220)
                         result_time = current_time
                         status_messages = ["⚠️ No known face detected - admin alerted"]
                         status_time = current_time
-                    else:
-                        print("   ℹ️ Motion timeout alert skipped because of cooldown")
 
-                    motion_active = False
-                    motion_deadline = 0
-                    recognition_votes = {}
+                        # Start repeat timing after the first timeout alert.
+                        if unknown_visible_since <= 0:
+                            unknown_visible_since = current_time
+                        unknown_last_seen_time = current_time
+                    else:
+                        unknown_persisted = (
+                            unknown_visible_since > 0 and
+                            (current_time - unknown_visible_since) >= FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS
+                        )
+                        cooldown_ready = (current_time - self.last_motion_alert_time) >= FULL_MODE_ALERT_COOLDOWN_SECONDS
+
+                        if unknown_persisted and cooldown_ready:
+                            self._send_motion_timeout_alert(frame, FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS)
+                            self.last_motion_alert_time = current_time
+                            last_result_text = "REPEAT ADMIN ALERT SENT"
+                            last_result_color = (0, 0, 220)
+                            result_time = current_time
+                            status_messages = ["⚠️ Unknown persists - repeat alert sent"]
+                            status_time = current_time
+                        elif unknown_persisted:
+                            status_messages = ["ℹ️ Unknown persists - repeat alert cooldown active"]
+                            status_time = current_time
+                        else:
+                            wait_left = int(max(0, FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS - (current_time - unknown_visible_since))) if unknown_visible_since > 0 else int(FULL_MODE_REPEAT_UNKNOWN_AFTER_SECONDS)
+                            status_messages = [f"ℹ️ Unknown must persist {wait_left}s more for repeat alert"]
+                            status_time = current_time
 
                 cv2.rectangle(display, (0, 0), (w, 90), (35, 35, 35), -1)
                 cv2.putText(display, "FULL MODE - LIVE CAMERA + PIR",
                            (15, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 0), 2)
 
-                mode_text = "Scanning for motion..."
-                if motion_active:
+                mode_text = "Continuous face scan active"
+                if pir_window_active:
                     remaining = max(0, int(motion_deadline - current_time))
-                    mode_text = f"Motion active - scanning for known face ({remaining}s left)"
+                    mode_text = f"PIR active |timeout {remaining}sec|"
                 cv2.putText(display, mode_text,
                            (15, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+
+                for face in detected_faces:
+                    top, right, bottom, left = face['location']
+                    color = face['color']
+                    name = face['name']
+                    conf = face.get('confidence', 0)
+
+                    cv2.rectangle(display, (left, top), (right, bottom), color, 2)
+
+                    label = name
+                    if conf > 0:
+                        label += f" ({conf:.0%})"
+
+                    text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+                    cv2.rectangle(
+                        display,
+                        (left, bottom),
+                        (left + text_size[0] + 10, bottom + text_size[1] + 12),
+                        color,
+                        -1,
+                    )
+                    cv2.putText(
+                        display,
+                        label,
+                        (left + 5, bottom + text_size[1] + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (255, 255, 255),
+                        2,
+                    )
 
                 if last_result_text and (current_time - result_time < 3):
                     cv2.rectangle(display, (0, h - 55), (w, h), last_result_color, -1)
@@ -895,7 +1046,7 @@ class DoorSystem:
                                (15, h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 1)
                 else:
                     cv2.rectangle(display, (0, h - 45), (w, h), (50, 50, 50), -1)
-                    cv2.putText(display, "Q = Quit",
+                    cv2.putText(display, "| R = Refresh |Q = Quit",
                                (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 150), 1)
 
                 cv2.imshow('Full Mode', display)
@@ -903,6 +1054,18 @@ class DoorSystem:
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q') or key == ord('Q'):
                     self.running = False
+                elif key == ord('r') or key == ord('R'):
+                    print("\n🔄 Refreshing face database...")
+                    try:
+                        self.face_service.refresh_cache()
+                        total = Student.objects.filter(is_active=True).count()
+                        print(f"   ✅ Reloaded {total} students")
+                        status_messages = [f"🔄 Refreshed: {total} students"]
+                        status_time = current_time
+                    except Exception as e:
+                        print(f"   ❌ Refresh failed: {e}")
+                        status_messages = ["❌ Refresh failed"]
+                        status_time = current_time
 
         except KeyboardInterrupt:
             print("\n\n🛑 Stopping system...")
@@ -965,15 +1128,7 @@ class DoorSystem:
         # Process result
         print()
         if recognized_student:
-            print("  ╔════════════════════════════════════════════╗")
-            print(f"  ║  ✅ ACCESS GRANTED: {recognized_student.name[:25].ljust(25)}║")
-            print("  ╚════════════════════════════════════════════╝")
-            print(f"  📊 Final Confidence: {recognized_confidence:.1%}")
-            print()
-            print("  ┌──────────────────────────────────────────┐")
-            print("  │  ➡️  Sending UNLOCK command to Arduino   │")
-            print("  │  🔓 DOOR UNLOCKED                        │")
-            print("  └──────────────────────────────────────────┘")
+            print_access_granted_block(recognized_student.name, recognized_confidence)
             self.conn.send_command(build_unlock_command(recognized_student.name))
             print()
             save_attendance(recognized_student)
@@ -1676,8 +1831,8 @@ def live_camera_door_lock():
     # SETTINGS
     # ─────────────────────────────────────────────────────────────
     RECOGNITION_INTERVAL = 0.5      # Check every 0.5 seconds
-    UNLOCK_DURATION = 6             # Keep door unlocked for 6 seconds
-    PERSON_COOLDOWN = 5             # Wait 5 seconds before unlocking for same person again
+    UNLOCK_DURATION = LIVE_DOOR_UNLOCK_DURATION_SECONDS
+    PERSON_COOLDOWN = LIVE_DOOR_PERSON_COOLDOWN_SECONDS
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
     DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
     DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
@@ -1990,11 +2145,17 @@ def live_camera_door_lock():
                                                 except:
                                                     pass
                                             else:
-                                                # Cooldown
-                                                remaining = int(PERSON_COOLDOWN - (current_time - last_unlock))
-                                                color = (255, 165, 0)  # Orange
-                                                status = "cooldown"
-                                                status_messages.append(f"⏳ {name} (Wait {remaining}s)")
+                                                # While a known face remains in view, keep the door open timer alive.
+                                                if door_is_unlocked:
+                                                    door_unlock_time = current_time
+                                                    color = (0, 255, 0)
+                                                    status = "open_hold"
+                                                    status_messages.append(f"🔓 Holding open: {name}")
+                                                else:
+                                                    remaining = int(PERSON_COOLDOWN - (current_time - last_unlock))
+                                                    color = (255, 165, 0)  # Orange
+                                                    status = "cooldown"
+                                                    status_messages.append(f"⏳ {name} (Wait {remaining}s)")
                                         else:
                                             color = (0, 165, 255)  # Low confidence
                                             status = "low_conf"

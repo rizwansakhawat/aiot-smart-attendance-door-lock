@@ -12,6 +12,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 Servo doorServo;
 
 bool doorIsOpen = false;
+bool pirLatchedHigh = false;
 unsigned long doorOpenedTime = 0;
 unsigned long lastMotionSentTime = 0;
 unsigned long verifyMessageShownAt = 0;
@@ -19,7 +20,7 @@ unsigned long verifyMessageShownAt = 0;
 const unsigned long DOOR_OPEN_TIME = 6000;      // 6 seconds
 const unsigned long MOTION_COOLDOWN = 1200;     // Avoid repeated MOTION spam
 const unsigned long VERIFY_SCREEN_TIMEOUT = 4000; // Return to idle if no command arrives
-const int SERVO_OPEN_ANGLE = 120;
+const int SERVO_OPEN_ANGLE = 90;
 const int SERVO_CLOSED_ANGLE = 0;
 
 String serialBuffer = "";
@@ -104,9 +105,9 @@ void deniedState() {
 
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("UNAUTHENTICATED");
+  lcd.print("Unauthorized");
   lcd.setCursor(0, 1);
-  lcd.print("Access Blocked");
+  lcd.print("Access Denied");
 
   Serial.println("DOOR_LOCKED");
   delay(1200);
@@ -122,9 +123,9 @@ void deniedHoldState() {
 
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("UNAUTHENTICATED");
+  lcd.print("Unauthorized");
   lcd.setCursor(0, 1);
-  lcd.print("Access Blocked");
+  lcd.print("Access Denied");
 
   Serial.println("DOOR_LOCKED");
 }
@@ -163,7 +164,7 @@ void processCommand(String cmd) {
     return;
   }
 
-  if (cmd.startsWith("UNLOCK") || cmd.startsWith("unlock")) {
+  if (cmd.startsWith("UNLOCK")) {
     String userName = "";
     int sepIndex = cmd.indexOf(':');
     if (sepIndex < 0) {
@@ -177,8 +178,7 @@ void processCommand(String cmd) {
     return;
   }
 
-  Serial.print("UNKNOWN_CMD:");
-  Serial.println(cmd);
+  // Ignore unknown commands to keep serial output low.
 }
 
 void setup() {
@@ -226,17 +226,22 @@ void loop() {
 
   int pirState = digitalRead(PIR_PIN);
 
-  // PIR only notifies motion; Python decides access based on face recognition.
-  if (pirState == HIGH && !doorIsOpen && (millis() - lastMotionSentTime >= MOTION_COOLDOWN)) {
-    Serial.println("MOTION");
-    lastMotionSentTime = millis();
-    verifyMessageShownAt = millis();
+  // Trigger motion once per new HIGH edge instead of repeating while PIR stays HIGH.
+  if (pirState == HIGH) {
+    if (!pirLatchedHigh && !doorIsOpen && (millis() - lastMotionSentTime >= MOTION_COOLDOWN)) {
+      Serial.println("MOTION");
+      lastMotionSentTime = millis();
+      verifyMessageShownAt = millis();
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Please Wait...");
-    lcd.setCursor(0, 1);
-    lcd.print("Verify Identity");
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Please Wait...");
+      lcd.setCursor(0, 1);
+      lcd.print("Verify Identity");
+    }
+    pirLatchedHigh = true;
+  } else {
+    pirLatchedHigh = false;
   }
 
   // If no unlock/denied command comes back, restore idle message automatically.

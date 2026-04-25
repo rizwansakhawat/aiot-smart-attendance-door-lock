@@ -82,7 +82,6 @@ class Attendance(models.Model):
     
     ENTRY_TYPE_CHOICES = [
         ('success', 'Access Granted'),
-        ('denied', 'Access Denied'),
     ]
     
     student = models.ForeignKey(

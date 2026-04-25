@@ -259,10 +259,6 @@
         background: #0d8f87;
     }
 
-    .trend-legend .dot.denied {
-        background: #c92449;
-    }
-
     .trend-legend .dot.volume {
         background: #2452e8;
     }
@@ -280,11 +276,6 @@
     .status-pill.success {
         background: rgba(19, 176, 165, 0.14);
         color: #0d7f77;
-    }
-
-    .status-pill.denied {
-        background: rgba(223, 47, 84, 0.12);
-        color: #bb2345;
     }
 
     .empty-state {
@@ -436,10 +427,6 @@
         <div class="name">Allowed Access</div>
         <div class="num">{{ total_success }}</div>
     </div>
-    <div class="quick-stat danger">
-        <div class="name">Denied Access</div>
-        <div class="num">{{ total_denied }}</div>
-    </div>
     <div class="quick-stat">
         <div class="name">Unique Students</div>
         <div class="num">{{ unique_students }}</div>
@@ -485,14 +472,13 @@
             <div class="trend-legend">
                 <span><span class="dot volume"></span>Students marked</span>
                 <span><span class="dot success"></span>Allowed students</span>
-                <span><span class="dot denied"></span>Denied students</span>
             </div>
             {% if daily_stats %}
                 {% for item in daily_stats|slice:"-10:" reversed %}
                 <div class="bar-row">
                     <div class="bar-label">
                         <span>{{ item.timestamp__date|date:"M d" }}</span>
-                        <span>Present: {{ item.unique_students }} / {{ total_students }} ({% widthratio item.unique_students total_students 100 %}%) | Allowed: {{ item.success_students }} | Denied: {{ item.denied_students }}</span>
+                        <span>Present: {{ item.unique_students }} / {{ total_students }} ({% widthratio item.unique_students total_students 100 %}%) | Allowed: {{ item.success_students }}</span>
                     </div>
                     <div class="bar-track">
                         <div class="bar-fill" style="width: {% widthratio item.unique_students total_students 100 %}%;"></div>
@@ -500,11 +486,6 @@
                     {% if item.success_students %}
                     <div class="bar-track">
                         <div class="bar-fill success" style="width: {% widthratio item.success_students total_students 100 %}%;"></div>
-                    </div>
-                    {% endif %}
-                    {% if item.denied_students %}
-                    <div class="bar-track">
-                        <div class="bar-fill danger" style="width: {% widthratio item.denied_students total_students 100 %}%;"></div>
                     </div>
                     {% endif %}
                 </div>
@@ -578,11 +559,7 @@
                     <td>{{ record.timestamp|date:"Y-m-d" }}</td>
                     <td>{{ record.timestamp|time:"H:i:s" }}</td>
                     <td>
-                        {% if record.entry_type == 'success' %}
                         <span class="status-pill success"><i class="bi bi-check-circle-fill"></i>Allowed</span>
-                        {% else %}
-                        <span class="status-pill denied"><i class="bi bi-x-octagon-fill"></i>Denied</span>
-                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}

@@ -1,147 +1,511 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Admin Dashboard - Smart Attendance System{% endblock %}
+{% block title %}Admin Dashboard - Smart Attendance & Door Lock System{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/admin_dashboard.css' %}" rel="stylesheet">
+{% endblock %}
 
 {% block content %}
-<!-- Welcome Banner -->
-<div class="welcome-banner" style="background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%); border-radius: 20px; padding: 30px; color: white; margin-bottom: 30px;">
-    <div class="row align-items-center">
-        <div class="col-md-8">
-            <h2><i class="bi bi-shield-check me-2"></i>Admin Dashboard</h2>
-            <p class="mb-0">Welcome back, {{ request.user.get_full_name|default:request.user.username }}! Full system access enabled.</p>
+<div class="admin-wrap">
+    <div class="admin-topbar mb-4">
+        <div class="row align-items-center g-3">
+            <div class="col-lg-7">
+                <h2 class="mb-1"><i class="bi bi-graph-up-arrow me-2"></i>Smart Attendance & Door Lock Dashboard</h2>
+                <p class="mb-0 opacity-75">Welcome back, {{ request.user.get_full_name|default:request.user.username }}. Live attendance and access control are operating normally.</p>
+            </div>
+            <div class="col-lg-5">
+                <div class="admin-actions">
+                    <button type="button" class="admin-icon-btn" id="darkModeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+                        <i class="bi bi-moon-stars-fill"></i>
+                    </button>
+                    <button type="button" class="admin-icon-btn position-relative" data-bs-toggle="modal" data-bs-target="#notificationsModal" title="View notifications" aria-label="Notifications">
+                        <i class="bi bi-bell-fill"></i>
+                        {% with total_notifications=unread_alert_count|add:recent_entry_count %}
+                        {% if total_notifications > 0 %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            {{ total_notifications }}
+                        </span>
+                        {% endif %}
+                        {% endwith %}
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="col-md-4 text-md-end">
-            <div style="font-size: 2rem; font-weight: 700;" id="current-time">--:--:--</div>
-            <div>{{ today|date:"l, F d, Y" }}</div>
+        <div class="d-flex align-items-center justify-content-between mt-3">
+            <small class="opacity-75"><i class="bi bi-calendar3 me-1"></i>{{ today|date:"l, F d, Y" }}</small>
+            <strong id="current-time" class="clock-size">--:--:--</strong>
+        </div>
+    </div>
+
+    <div class="row admin-stats g-3">
+        <div class="col-sm-6 col-xl-3">
+            <div class="stat-tile">
+                <div class="stat-head">
+                    <span class="icon primary"><i class="bi bi-people-fill"></i></span>
+                    <span class="stat-trend {% if total_students_trend.is_positive %}up{% else %}down{% endif %}">
+                        <i class="bi {{ total_students_trend.icon }}"></i>
+                        {% if total_students_trend.is_stable %}
+                            {{ total_students_trend.label }}
+                        {% else %}
+                            {% if total_students_trend.is_positive %}+{% else %}-{% endif %}{{ total_students_trend.label }}%
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="stat-number">{{ total_students }}</div>
+                <div class="stat-label">Students Registered</div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="stat-tile">
+                <div class="stat-head">
+                    <span class="icon success"><i class="bi bi-check-circle-fill"></i></span>
+                    <span class="stat-trend {% if present_trend.is_positive %}up{% else %}down{% endif %}">
+                        <i class="bi {{ present_trend.icon }}"></i>
+                        {% if present_trend.is_stable %}
+                            {{ present_trend.label }}
+                        {% else %}
+                            {% if present_trend.is_positive %}+{% else %}-{% endif %}{{ present_trend.label }}%
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="stat-number">{{ present_today }}</div>
+                <div class="stat-label">Present Today</div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="stat-tile">
+                <div class="stat-head">
+                    <span class="icon warning"><i class="bi bi-person-dash-fill"></i></span>
+                    <span class="stat-trend {% if absent_trend.is_positive %}down{% else %}up{% endif %}">
+                        <i class="bi {{ absent_trend.icon }}"></i>
+                        {% if absent_trend.is_stable %}
+                            {{ absent_trend.label }}
+                        {% else %}
+                            {% if absent_trend.is_positive %}-{% else %}+{% endif %}{{ absent_trend.label }}%
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="stat-number">{{ absent_today }}</div>
+                <div class="stat-label">Absent Today</div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="stat-tile">
+                <div class="stat-head">
+                    <span class="icon rate"><i class="bi bi-bar-chart-line-fill"></i></span>
+                    <span class="stat-trend {% if attendance_rate_trend.is_positive %}up{% else %}down{% endif %}">
+                        <i class="bi {{ attendance_rate_trend.icon }}"></i>
+                        {% if attendance_rate_trend.is_stable %}
+                            {{ attendance_rate_trend.label }}
+                        {% else %}
+                            {% if attendance_rate_trend.is_positive %}+{% else %}-{% endif %}{{ attendance_rate_trend.label }}%
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="stat-number">{{ attendance_percentage }}%</div>
+                <div class="stat-label">Today's Attendance Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-1">
+        <div class="col-xl-8">
+            <div class="panel mb-4">
+                <div class="panel-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i>Weekly Performance</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="panel-subtitle small">Last 7 days</span>
+                        <span class="graph-trend {% if week_performance_trend.is_positive %}up{% else %}down{% endif %}">
+                            <i class="bi {{ week_performance_trend.icon }}"></i>
+                            {% if week_performance_trend.is_stable %}
+                                Stable
+                            {% else %}
+                                {% if week_performance_trend.is_positive %}+{% else %}-{% endif %}{{ week_performance_trend.label }}% vs last week
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-canvas-wrap">
+                        <canvas id="attendanceChart" aria-label="Weekly attendance chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel mb-4">
+                <div class="panel-header">
+                    <h5 class="mb-0"><i class="bi bi-diagram-3"></i>Department Breakdown</h5>
+                    <span class="panel-subtitle small">Attendance by section</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-canvas-wrap chart-canvas-wrap-sm">
+                        <canvas id="sectionStackedChart" aria-label="Department attendance chart"></canvas>
+                    </div>
+                    <div class="stacked-legend" id="stackedLegend"></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i>Recent Activity</h5>
+                    <a href="{% url 'attendance_list' %}" class="btn btn-sm btn-primary">View All</a>
+                </div>
+                <div class="panel-body pt-2">
+                    <div class="table-responsive rounded-attendance">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Roll Number</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in recent_entries %}
+                                <tr>
+                                    <td><strong>{{ entry.student.name }}</strong></td>
+                                    <td>{{ entry.student.roll_number }}</td>
+                                    <td>{{ entry.timestamp|time:"H:i:s" }}</td>
+                                    <td><span class="badge-soft-success"><i class="bi bi-check-lg"></i>Recorded</span></td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                        <span>No recent activity</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="panel h-100">
+                <div class="panel-header">
+                    <h5 class="mb-0"><i class="bi bi-lightning-fill"></i>Quick Actions</h5>
+                </div>
+                <div class="panel-body">
+                    <div class="quick-grid">
+                        <a href="{% url 'register_student' %}" class="quick-card">
+                            <span class="quick-icon primary"><i class="bi bi-person-plus-fill"></i></span>
+                            <span>Register Student</span>
+                        </a>
+                        <a href="{% url 'student_list' %}" class="quick-card">
+                            <span class="quick-icon info"><i class="bi bi-people-fill"></i></span>
+                            <span>Manage Students</span>
+                        </a>
+                        <a href="{% url 'reports' %}" class="quick-card">
+                            <span class="quick-icon success"><i class="bi bi-graph-up-arrow"></i></span>
+                            <span>Generate Reports</span>
+                        </a>
+                        <a href="{% url 'system_logs' %}" class="quick-card">
+                            <span class="quick-icon warn"><i class="bi bi-terminal"></i></span>
+                            <span>System Logs</span>
+                        </a>
+                        {% if request.user.is_superuser %}
+                        <a href="{% url 'door_control_panel' %}" class="quick-card">
+                            <span class="quick-icon primary"><i class="bi bi-unlock-fill"></i></span>
+                            <span>Door Control</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                    <hr class="my-3 opacity-25">
+                    <div class="small text-muted mb-2">Today's snapshot</div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted"><i class="bi bi-check-circle me-2"></i>Present</span>
+                        <strong>{{ present_today }} / {{ total_students }}</strong>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Stats Cards -->
-<div class="row g-4 mb-4">
-    <div class="col-sm-6 col-lg-3">
-        <div class="stat-card">
-            <div class="icon primary" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #4361ee, #3f37c9); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                <i class="bi bi-people-fill"></i>
-            </div>
-            <div class="number" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ total_students }}</div>
-            <div class="label" style="color: #6c757d;">Total Registered</div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-lg-3">
-        <div class="stat-card">
-            <div class="icon success" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #2ec4b6, #20a39e); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                <i class="bi bi-check-circle-fill"></i>
-            </div>
-            <div class="number text-success" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ present_today }}</div>
-            <div class="label" style="color: #6c757d;">Present Today</div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-lg-3">
-        <div class="stat-card">
-            <div class="icon warning" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #ff9f1c, #f77f00); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                <i class="bi bi-exclamation-circle-fill"></i>
-            </div>
-            <div class="number text-warning" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ absent_today }}</div>
-            <div class="label" style="color: #6c757d;">Absent Today</div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-lg-3">
-        <div class="stat-card">
-            <div class="icon danger" style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #e71d36, #c9184a); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                <i class="bi bi-shield-x-fill"></i>
-            </div>
-            <div class="number text-danger" style="font-size: 2rem; font-weight: 700; margin-top: 15px;">{{ failed_attempts }}</div>
-            <div class="label" style="color: #6c757d;">Failed Attempts</div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Attendance & Quick Actions -->
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="table-card" style="background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
-            <div class="card-header" style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Attendance</h5>
-                <a href="{% url 'attendance_list' %}" class="btn btn-sm btn-primary">View All</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Student</th>
-                            <th>Roll Number</th>
-                            <th>Time</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in recent_entries %}
-                        <tr>
-                            <td><strong>{{ entry.student.name }}</strong></td>
-                            <td>{{ entry.student.roll_number }}</td>
-                            <td>{{ entry.timestamp|time:"H:i:s" }}</td>
-                            <td><span class="badge bg-success">Present</span></td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                No attendance records for today
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-4">
-        <div class="stat-card h-100">
-            <h5 class="mb-4"><i class="bi bi-lightning me-2"></i>Quick Actions</h5>
-            
-            <div class="d-grid gap-3">
-                <a href="{% url 'register_student' %}" class="btn btn-primary">
-                    <i class="bi bi-person-plus me-2"></i>Register New Student
-                </a>
-                <a href="{% url 'student_list' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-people me-2"></i>Manage Students
-                </a>
-                {% if request.user.is_superuser %}
-                <a href="{% url 'door_control_panel' %}" class="btn btn-outline-danger">
-                    <i class="bi bi-door-open me-2"></i>Door Control
-                </a>
-                {% endif %}
-                <a href="{% url 'reports' %}" class="btn btn-outline-success">
-                    <i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Report
-                </a>
-                <a href="{% url 'system_logs' %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-terminal me-2"></i>System Logs
-                </a>
-            </div>
-            
-            <hr class="my-4">
-            
-            <div class="text-center">
-                <div class="h3 mb-0 text-primary">{{ attendance_percentage }}%</div>
-                <small class="text-muted">Today's Attendance Rate</small>
-            </div>
-        </div>
-    </div>
-</div>
+{{ week_stats|json_script:"weekStatsData" }}
+{{ section_week_stats|json_script:"sectionWeekStatsData" }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    (function () {
+        const body = document.body;
+        const toggle = document.getElementById('darkModeToggle');
+        const syncDarkModeIcon = () => {
+            if (!toggle) {
+                return;
+            }
+            const icon = toggle.querySelector('i');
+            if (!icon) {
+                return;
+            }
+            icon.className = body.classList.contains('admin-dark') ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+        };
+
+        const saved = localStorage.getItem('admin-dark-mode');
+        if (saved === 'on') {
+            body.classList.add('admin-dark');
+        }
+        syncDarkModeIcon();
+
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                body.classList.toggle('admin-dark');
+                localStorage.setItem('admin-dark-mode', body.classList.contains('admin-dark') ? 'on' : 'off');
+                syncDarkModeIcon();
+                drawAttendanceChart();
+                drawSectionStackedChart();
+            });
+        }
+    })();
+
     function updateTime() {
         const now = new Date();
         document.getElementById('current-time').textContent = now.toLocaleTimeString('en-US', { hour12: false });
     }
+
+    function drawAttendanceChart() {
+        const raw = document.getElementById('weekStatsData');
+        const chart = document.getElementById('attendanceChart');
+        if (!raw || !chart) {
+            return;
+        }
+
+        let stats = [];
+        try {
+            stats = JSON.parse(raw.textContent || '[]');
+        } catch (e) {
+            return;
+        }
+
+        const ctx = chart.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = chart.getBoundingClientRect();
+        chart.width = rect.width * dpr;
+        chart.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        const isDark = document.body.classList.contains('admin-dark');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const lineColor = isDark ? '#a5b4fc' : '#6366f1';
+        const maxValue = Math.max(1, ...stats.map(item => item.count || 0));
+        const avgValue = stats.length
+            ? stats.reduce((sum, item) => sum + (item.count || 0), 0) / stats.length
+            : 0;
+
+        const padding = { top: 18, right: 18, bottom: 32, left: 34 };
+        const innerW = rect.width - padding.left - padding.right;
+        const innerH = rect.height - padding.top - padding.bottom;
+
+        ctx.strokeStyle = isDark ? 'rgba(148,163,184,0.28)' : 'rgba(148,163,184,0.34)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i += 1) {
+            const y = padding.top + (innerH / 4) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(rect.width - padding.right, y);
+            ctx.stroke();
+        }
+
+        const points = stats.map((item, index) => {
+            const x = padding.left + (index * innerW) / Math.max(stats.length - 1, 1);
+            const y = padding.top + innerH - ((item.count || 0) / maxValue) * innerH;
+            return { x, y, label: item.day, value: item.count || 0 };
+        });
+
+        if (!points.length) {
+            return;
+        }
+
+        const avgY = padding.top + innerH - (avgValue / maxValue) * innerH;
+        ctx.save();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = isDark ? 'rgba(244, 114, 182, 0.8)' : 'rgba(190, 24, 93, 0.75)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, avgY);
+        ctx.lineTo(rect.width - padding.right, avgY);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = isDark ? '#f9a8d4' : '#9d174d';
+        ctx.font = '11px Segoe UI, sans-serif';
+        ctx.fillText(`Avg ${avgValue.toFixed(1)}`, padding.left + 6, avgY - 6);
+
+        ctx.beginPath();
+        points.forEach((point, index) => {
+            if (index === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        });
+        ctx.lineTo(points[points.length - 1].x, padding.top + innerH);
+        ctx.lineTo(points[0].x, padding.top + innerH);
+        ctx.closePath();
+        const gradientFill = ctx.createLinearGradient(0, padding.top, 0, padding.top + innerH);
+        if (isDark) {
+            gradientFill.addColorStop(0, 'rgba(129, 140, 248, 0.38)');
+            gradientFill.addColorStop(1, 'rgba(99, 102, 241, 0.04)');
+        } else {
+            gradientFill.addColorStop(0, 'rgba(99, 102, 241, 0.34)');
+            gradientFill.addColorStop(1, 'rgba(99, 102, 241, 0.06)');
+        }
+        ctx.fillStyle = gradientFill;
+        ctx.fill();
+
+        ctx.beginPath();
+        points.forEach((point, index) => {
+            if (index === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        });
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.font = '12px Segoe UI, sans-serif';
+        ctx.fillStyle = textColor;
+        points.forEach((point) => {
+            const pointX = Math.min(rect.width - padding.right - 8, Math.max(padding.left + 8, point.x));
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = lineColor;
+            ctx.fill();
+
+            // Data label above each point.
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
+            ctx.fillText(String(point.value), pointX, point.y - 10);
+
+            ctx.fillStyle = textColor;
+            ctx.fillText(point.label, pointX, rect.height - 10);
+        });
+        ctx.textAlign = 'start';
+    }
+
+    function drawSectionStackedChart() {
+        const raw = document.getElementById('sectionWeekStatsData');
+        const chart = document.getElementById('sectionStackedChart');
+        const legendContainer = document.getElementById('stackedLegend');
+        if (!raw || !chart || !legendContainer) {
+            return;
+        }
+
+        let payload = null;
+        try {
+            payload = JSON.parse(raw.textContent || '{}');
+        } catch (e) {
+            return;
+        }
+
+        const labels = payload.labels || [];
+        const sections = payload.sections || [];
+        const series = payload.series || {};
+        if (!labels.length || !sections.length) {
+            return;
+        }
+
+        const palette = [
+            '#4f46e5', '#16a34a', '#f59e0b', '#0ea5e9', '#ef4444',
+            '#a855f7', '#14b8a6', '#f97316', '#84cc16', '#ec4899',
+            '#3b82f6', '#22c55e'
+        ];
+
+        const colorFromName = (name) => {
+            let hash = 0;
+            for (let i = 0; i < name.length; i += 1) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash) % 360;
+            return `hsl(${hue}, 68%, 52%)`;
+        };
+
+        const sectionColors = {};
+        sections.forEach((section, idx) => {
+            sectionColors[section] = idx < palette.length ? palette[idx] : colorFromName(section);
+        });
+
+        legendContainer.innerHTML = sections.map((section) => (
+            `<span class="legend-item"><span class="legend-dot" style="background:${sectionColors[section]}"></span>${section}</span>`
+        )).join('');
+
+        const isDark = document.body.classList.contains('admin-dark');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(148,163,184,0.28)' : 'rgba(148,163,184,0.34)';
+
+        const ctx = chart.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = chart.getBoundingClientRect();
+        chart.width = rect.width * dpr;
+        chart.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        const padding = { top: 18, right: 16, bottom: 30, left: 34 };
+        const innerW = rect.width - padding.left - padding.right;
+        const innerH = rect.height - padding.top - padding.bottom;
+        const step = innerW / Math.max(labels.length, 1);
+        const barWidth = Math.min(42, step * 0.55);
+
+        const totals = labels.map((_, i) => (
+            sections.reduce((sum, section) => sum + ((series[section] || [])[i] || 0), 0)
+        ));
+        const maxTotal = Math.max(1, ...totals);
+
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i += 1) {
+            const y = padding.top + (innerH / 4) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(rect.width - padding.right, y);
+            ctx.stroke();
+        }
+
+        labels.forEach((label, index) => {
+            const x = padding.left + index * step + (step - barWidth) / 2;
+            let yCursor = padding.top + innerH;
+
+            sections.forEach((section) => {
+                const value = ((series[section] || [])[index] || 0);
+                if (!value) {
+                    return;
+                }
+                const h = (value / maxTotal) * innerH;
+                yCursor -= h;
+                ctx.fillStyle = sectionColors[section];
+                ctx.fillRect(x, yCursor, barWidth, h);
+            });
+
+            ctx.fillStyle = textColor;
+            ctx.font = '11px Segoe UI, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(totals[index]), x + barWidth / 2, yCursor - 6);
+            ctx.fillText(label, x + barWidth / 2, rect.height - 8);
+        });
+        ctx.textAlign = 'start';
+    }
+
     updateTime();
     setInterval(updateTime, 1000);
+    window.addEventListener('resize', () => {
+        drawAttendanceChart();
+        drawSectionStackedChart();
+    });
+    drawAttendanceChart();
+    drawSectionStackedChart();
 </script>
 {% endblock %}

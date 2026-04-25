@@ -360,6 +360,34 @@ def admin_dashboard(request):
     Admin Dashboard - Full access to all data
     """
     today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
+    seven_days_ago = today - timedelta(days=7)
+
+    def _percent_change(current, previous):
+        if previous == 0:
+            return 0.0
+        return round(((current - previous) / previous) * 100, 1)
+
+    def _trend_meta(current, previous):
+        change = _percent_change(current, previous)
+        if abs(change) < 0.1:
+            return {
+                'value': 0.0,
+                'is_positive': True,
+                'is_stable': True,
+                'icon': 'bi-stars',
+                'label': 'Stable',
+            }
+
+        is_positive = change > 0
+        signed_value = abs(change)
+        return {
+            'value': signed_value,
+            'is_positive': is_positive,
+            'is_stable': False,
+            'icon': 'bi-arrow-up-right' if is_positive else 'bi-arrow-down-right',
+            'label': f"{signed_value:.1f}",
+        }
     
     # Get today's attendance
     today_attendance = Attendance.objects.filter(
@@ -371,12 +399,26 @@ def admin_dashboard(request):
     total_students = Student.objects.filter(is_active=True).count()
     present_today = today_attendance.values('student').distinct().count()
     absent_today = total_students - present_today
-    
-    # Get failed attempts
-    failed_attempts = Attendance.objects.filter(
-        timestamp__date=today,
-        entry_type='denied'
+
+    total_students_last_week = Student.objects.filter(
+        is_active=True,
+        registered_at__date__lte=seven_days_ago,
     ).count()
+
+    present_yesterday = Attendance.objects.filter(
+        timestamp__date=yesterday,
+        entry_type='success'
+    ).values('student').distinct().count()
+    total_students_yesterday = Student.objects.filter(
+        is_active=True,
+        registered_at__date__lte=yesterday,
+    ).count()
+    absent_yesterday = max(total_students_yesterday - present_yesterday, 0)
+
+    attendance_percentage = round((present_today / total_students * 100), 1) if total_students > 0 else 0
+    attendance_percentage_yesterday = round(
+        (present_yesterday / total_students_yesterday * 100), 1
+    ) if total_students_yesterday > 0 else 0
     
     # Get recent entries
     recent_entries = today_attendance[:10]
@@ -394,17 +436,95 @@ def admin_dashboard(request):
             'date': day.strftime('%Y-%m-%d'),
             'count': count
         })
+
+    current_week_start = today - timedelta(days=6)
+    previous_week_start = today - timedelta(days=13)
+    previous_week_end = today - timedelta(days=7)
+
+    previous_week_stats_map = {
+        row['timestamp__date']: row['count']
+        for row in Attendance.objects.filter(
+            entry_type='success',
+            timestamp__date__gte=previous_week_start,
+            timestamp__date__lte=previous_week_end,
+        ).values('timestamp__date').annotate(count=Count('student', distinct=True))
+    }
+
+    previous_week_stats = []
+    for i in range(6, -1, -1):
+        day = previous_week_start + timedelta(days=i)
+        previous_week_stats.append(previous_week_stats_map.get(day, 0))
+
+    current_week_values = [item['count'] for item in week_stats]
+    current_week_average = round(
+        sum(current_week_values) / len(current_week_values),
+        1,
+    ) if current_week_values else 0.0
+    previous_week_average = round(
+        sum(previous_week_stats) / len(previous_week_stats),
+        1,
+    ) if previous_week_stats else 0.0
+
+    week_performance_trend = _trend_meta(current_week_average, previous_week_average)
+
+    section_names = list(
+        Department.objects.filter(is_active=True)
+        .annotate(active_students=Count('students', filter=Q(students__is_active=True)))
+        .order_by('-active_students', 'name')
+        .values_list('name', flat=True)
+    )
+
+    section_labels = [item['day'] for item in week_stats]
+    section_series = {name: [0] * len(section_labels) for name in section_names}
+    if not section_names:
+        section_names = ['Unassigned']
+        section_series = {'Unassigned': [0] * len(section_labels)}
+
+    day_index = {
+        (current_week_start + timedelta(days=i)): i for i in range(len(section_labels))
+    }
+
+    section_rows = Attendance.objects.filter(
+        entry_type='success',
+        timestamp__date__gte=current_week_start,
+        timestamp__date__lte=today,
+    ).values(
+        'timestamp__date',
+        'student__department__name',
+    ).annotate(count=Count('student', distinct=True))
+
+    for row in section_rows:
+        day = row['timestamp__date']
+        idx = day_index.get(day)
+        if idx is None:
+            continue
+
+        department_name = row.get('student__department__name') or 'Unassigned'
+        if department_name in section_series:
+            section_series[department_name][idx] += row['count']
+
+    section_week_stats = {
+        'labels': section_labels,
+        'sections': section_names,
+        'series': section_series,
+    }
     
     context = {
         'is_admin': True,
         'total_students': total_students,
         'present_today': present_today,
         'absent_today': absent_today,
-        'failed_attempts': failed_attempts,
         'recent_entries': recent_entries,
         'today': today,
-        'attendance_percentage': round((present_today / total_students * 100), 1) if total_students > 0 else 0,
+        'attendance_percentage': attendance_percentage,
         'week_stats': week_stats,
+        'current_week_average': current_week_average,
+        'week_performance_trend': week_performance_trend,
+        'section_week_stats': section_week_stats,
+        'total_students_trend': _trend_meta(total_students, total_students_last_week),
+        'present_trend': _trend_meta(present_today, present_yesterday),
+        'absent_trend': _trend_meta(absent_today, absent_yesterday),
+        'attendance_rate_trend': _trend_meta(attendance_percentage, attendance_percentage_yesterday),
     }
     
     return render(request, 'attendance/admin_dashboard.html', context)
@@ -1060,7 +1180,7 @@ def attendance_list(request):
     if student_id and is_admin(request.user):
         records = records.filter(student_id=student_id)
     
-    if entry_type:
+    if entry_type == 'success':
         records = records.filter(entry_type=entry_type)
     
     paginator = Paginator(records, 50)
@@ -1160,7 +1280,6 @@ def generate_report(request):
     records = records.order_by('-timestamp')
 
     success_records = records.filter(entry_type='success')
-    denied_records = records.filter(entry_type='denied')
 
     summary = success_records.values('student__name', 'student__roll_number').annotate(
         total_days=Count('timestamp__date', distinct=True),
@@ -1170,21 +1289,22 @@ def generate_report(request):
     daily_stats = records.values('timestamp__date').annotate(
         total_entries=Count('id'),
         success_entries=Count('id', filter=Q(entry_type='success')),
-        denied_entries=Count('id', filter=Q(entry_type='denied')),
         unique_students=Count('student', distinct=True),
-        success_students=Count('student', filter=Q(entry_type='success'), distinct=True),
-        denied_students=Count('student', filter=Q(entry_type='denied'), distinct=True)
+        success_students=Count('student', filter=Q(entry_type='success'), distinct=True)
     ).order_by('timestamp__date')
 
     summary_list = list(summary)
     daily_stats_list = list(daily_stats)
+    for item in daily_stats_list:
+        item['denied_entries'] = 0
+        item['denied_students'] = 0
     max_summary_days = max([item['total_days'] for item in summary_list], default=1)
     max_daily_entries = max([item['total_entries'] for item in daily_stats_list], default=1)
     max_daily_students = max([item['unique_students'] for item in daily_stats_list], default=1)
 
     total_records = records.count()
     total_success = success_records.count()
-    total_denied = denied_records.count()
+    total_denied = 0
     unique_students = records.exclude(student__isnull=True).values('student').distinct().count()
     total_students = student_scope.count()
     active_days = success_records.values('timestamp__date').distinct().count()
@@ -1424,9 +1544,10 @@ def api_dashboard_stats(request):
         entry_type='success'
     ).values('student').distinct().count()
     
-    failed_attempts = Attendance.objects.filter(
+    failed_attempts = SystemLog.objects.filter(
         timestamp__date=today,
-        entry_type='denied'
+        log_type='warning',
+        message__istartswith='Access denied:'
     ).count()
     
     recent = Attendance.objects.filter(

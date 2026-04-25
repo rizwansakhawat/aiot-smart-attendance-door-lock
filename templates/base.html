@@ -15,18 +15,18 @@
     
     <style>
         :root {
-            --primary-color: #4361ee;
-            --secondary-color: #3f37c9;
-            --success-color: #2ec4b6;
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --success-color: #22c55e;
             --warning-color: #ff9f1c;
-            --danger-color: #e71d36;
+            --danger-color: #ef4444;
             --dark-color: #1a1a2e;
-            --light-color: #f8f9fa;
+            --light-color: #f8fafc;
         }
         
         body {
             font-family: 'Inter', 'Segoe UI', Tahoma, Arial, sans-serif;
-            background-color: #f5f7fb;
+            background-color: #f8fafc;
             min-height: 100vh;
         }
         
@@ -193,7 +193,7 @@
             color: rgba(255,255,255,0.65);
             text-decoration: none;
             border-radius: 12px;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             font-weight: 500;
             font-size: 0.95rem;
             position: relative;
@@ -216,14 +216,15 @@
             background: rgba(255,255,255,0.12);
             color: white;
             transform: translateX(4px);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 6px 18px rgba(99, 102, 241, 0.28);
         }
         
         .sidebar-menu a.active {
-            background: linear-gradient(135deg, rgba(67, 97, 238, 0.2), rgba(46, 196, 182, 0.2));
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.24), rgba(139, 92, 246, 0.22));
             color: white;
-            border: 1px solid rgba(46, 196, 182, 0.3);
-            box-shadow: 0 4px 20px rgba(46, 196, 182, 0.15);
+            border: 1px solid rgba(129, 140, 248, 0.4);
+            box-shadow: 0 10px 28px rgba(99, 102, 241, 0.24);
+            backdrop-filter: blur(10px);
         }
         
         .sidebar-menu a.active::before {
@@ -232,21 +233,25 @@
         
         .sidebar-menu a i {
             margin-right: 14px;
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             width: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
         }
         
         .sidebar-menu a:hover i {
-            transform: scale(1.1);
+            transform: scale(1.15) translateX(2px);
             color: var(--success-color);
+            filter: drop-shadow(0 4px 8px rgba(34, 197, 94, 0.3));
         }
         
         .sidebar-menu a.active i {
-            color: var(--success-color);
+            color: #a5b4fc;
+            transform: scale(1.1);
+            filter: drop-shadow(0 4px 12px rgba(165, 180, 252, 0.4));
         }
         
         .sidebar-menu .menu-header {
@@ -858,7 +863,7 @@
                 <ul class="sidebar-menu">
             <li>
                 <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i> Dashboard
+                    <i class="bi bi-graph-up-arrow"></i> Dashboard
                 </a>
             </li>
             
@@ -900,7 +905,7 @@
             <!-- Admin Only -->
             <li>
                 <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
-                    <i class="bi bi-file-earmark-bar-graph-fill"></i> Reports
+                    <i class="bi bi-bar-chart-fill"></i> Reports
                 </a>
             </li>
             
@@ -908,13 +913,13 @@
             
             <li>
                 <a href="{% url 'system_logs' %}" class="{% if request.resolver_match.url_name == 'system_logs' %}active{% endif %}">
-                    <i class="bi bi-terminal-fill"></i> System Logs
+                    <i class="bi bi-list-task"></i> System Logs
                 </a>
             </li>
             {% if user.is_superuser %}
             <li>
                 <a href="{% url 'door_control_panel' %}" class="{% if request.resolver_match.url_name == 'door_control_panel' %}active{% endif %}">
-                    <i class="bi bi-door-open-fill"></i> Door Control
+                    <i class="bi bi-unlock-fill"></i> Door Control
                 </a>
             </li>
             {% endif %}

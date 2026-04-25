@@ -327,11 +327,7 @@
                             <td>{{ record.timestamp|date:"M d, Y" }}</td>
                             <td>{{ record.timestamp|time:"H:i:s" }}</td>
                             <td>
-                                {% if record.entry_type == 'success' %}
-                                    <span class="badge bg-success">Present</span>
-                                {% else %}
-                                    <span class="badge bg-danger">Denied</span>
-                                {% endif %}
+                                <span class="badge bg-success">Present</span>
                             </td>
                             <td>{{ record.location }}</td>
                         </tr>

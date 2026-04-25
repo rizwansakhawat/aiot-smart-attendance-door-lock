@@ -94,7 +94,7 @@ class AttendanceAdmin(admin.ModelAdmin):
     def entry_badge(self, obj):
         if obj.entry_type == 'success':
             return format_html('<span style="color: white; background-color: green; padding: 3px 10px; border-radius: 3px;">✓ Granted</span>')
-        return format_html('<span style="color: white; background-color: red; padding: 3px 10px; border-radius: 3px;">✗ Denied</span>')
+        return format_html('<span style="color: white; background-color: #6c757d; padding: 3px 10px; border-radius: 3px;">• Recorded</span>')
     entry_badge.short_description = 'Access'
     
     def confidence_display(self, obj):

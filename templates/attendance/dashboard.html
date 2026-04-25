@@ -537,15 +537,9 @@
                                     {{ entry.timestamp|time:"H:i:s" }}
                                 </td>
                                 <td>
-                                    {% if entry.entry_type == 'success' %}
                                     <span class="status-badge success">
                                         <i class="bi bi-check-circle me-1"></i>Present
                                     </span>
-                                    {% else %}
-                                    <span class="status-badge danger">
-                                        <i class="bi bi-x-circle me-1"></i>Denied
-                                    </span>
-                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
@@ -694,16 +688,11 @@
             
             <div class="activity-timeline" id="activity-timeline">
                 {% for entry in recent_entries|slice:":5" %}
-                <div class="activity-item {% if entry.entry_type == 'success' %}success{% else %}danger{% endif %}">
+                <div class="activity-item success">
                     <div class="activity-time">{{ entry.timestamp|time:"H:i" }}</div>
                     <div class="activity-text">
-                        {% if entry.entry_type == 'success' %}
                         <i class="bi bi-check-circle text-success me-1"></i>
                         {{ entry.student.name }} marked present
-                        {% else %}
-                        <i class="bi bi-x-circle text-danger me-1"></i>
-                        Access denied
-                        {% endif %}
                     </div>
                 </div>
                 {% empty %}

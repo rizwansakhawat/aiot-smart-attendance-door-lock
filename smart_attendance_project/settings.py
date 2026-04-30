@@ -122,7 +122,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Asia/Karachi'
-USE_I18N = True
+USE_I18N = False
 
 USE_TZ = True
 

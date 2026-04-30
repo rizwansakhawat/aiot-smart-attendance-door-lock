@@ -408,14 +408,22 @@
 
         .sidebar-notify-badge {
             margin-left: auto;
-            background: rgba(231, 29, 54, 0.2);
-            color: #ffb3bd;
-            border: 1px solid rgba(231, 29, 54, 0.4);
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.28);
             min-width: 26px;
             text-align: center;
             font-size: 0.75rem;
+            font-weight: 700;
+            line-height: 1.2;
             padding: 2px 8px;
             border-radius: 999px;
+            box-shadow: 0 4px 10px rgba(220, 38, 38, 0.38);
+        }
+
+        .sidebar-menu a.active .sidebar-notify-badge {
+            border-color: rgba(255, 255, 255, 0.45);
+            box-shadow: 0 6px 12px rgba(220, 38, 38, 0.45);
         }
 
         .notify-modal-item {
@@ -873,12 +881,12 @@
             
             <li>
                 <a href="{% url 'register_student' %}" class="{% if request.resolver_match.url_name == 'register_student' %}active{% endif %}">
-                    <i class="bi bi-person-plus-fill"></i> Register Student
+                    <i class="bi bi-person-plus-fill"></i> Register New User
                 </a>
             </li>
             <li>
                 <a href="{% url 'student_list' %}" class="{% if request.resolver_match.url_name == 'student_list' %}active{% endif %}">
-                    <i class="bi bi-people-fill"></i> All Students
+                    <i class="bi bi-people-fill"></i> All Users
                 </a>
             </li>
             {% endif %}

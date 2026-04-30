@@ -9,7 +9,7 @@
 
 {% block content %}
 <div class="admin-wrap">
-    <div class="admin-topbar mb-4">
+    <div class="admin-topbar mb-3">
         <div class="row align-items-center g-3">
             <div class="col-lg-7">
                 <h2 class="mb-1"><i class="bi bi-graph-up-arrow me-2"></i>Smart Attendance & Door Lock Dashboard</h2>
@@ -24,7 +24,7 @@
                         <i class="bi bi-bell-fill"></i>
                         {% with total_notifications=unread_alert_count|add:recent_entry_count %}
                         {% if total_notifications > 0 %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill admin-notify-badge text-bg-danger">
                             {{ total_notifications }}
                         </span>
                         {% endif %}
@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <div class="row admin-stats g-3">
+    <div class="row admin-stats g-2">
         <div class="col-sm-6 col-xl-3">
             <div class="stat-tile">
                 <div class="stat-head">
@@ -113,7 +113,7 @@
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    <div class="row g-3 mt-0">
         <div class="col-xl-8">
             <div class="panel mb-4">
                 <div class="panel-header">

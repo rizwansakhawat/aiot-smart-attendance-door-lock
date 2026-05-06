@@ -761,6 +761,18 @@
                             {% endfor %}
                         </select>
                     </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            Section <span class="required">*</span>
+                        </label>
+                        <select name="section" id="section" class="form-select" required>
+                            <option value="">Select Section</option>
+                            {% for sec in sections %}
+                            <option value="{{ sec.pk }}" data-department="{{ sec.department.name }}">{{ sec.name }} &mdash; {{ sec.department.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     
                     <div class="col-md-6">
                         <label class="form-label">User Type</label>
@@ -952,6 +964,10 @@
                                 <tr>
                                     <th><i class="bi bi-building me-2"></i>Department</th>
                                     <td id="confirm-department">-</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-diagram-3 me-2"></i>Section</th>
+                                    <td id="confirm-section">-</td>
                                 </tr>
                                 <tr>
                                     <th><i class="bi bi-person-badge me-2"></i>User Type</th>
@@ -1146,6 +1162,7 @@
             const name = document.getElementById('name').value.trim();
             const roll = document.getElementById('roll_number').value.trim();
             const dept = document.getElementById('department').value;
+            const section = document.getElementById('section').value;
             
             if (!name) {
                 showAlert('Please enter the student\'s full name', 'danger');
@@ -1162,6 +1179,12 @@
             if(!dept) {
                 showAlert('Please select a department', 'danger');
                 document.getElementById('department').focus();
+                return;
+            }
+
+            if (!section) {
+                showAlert('Please select a section', 'danger');
+                document.getElementById('section').focus();
                 return;
             }
             
@@ -1418,6 +1441,11 @@
         const email = document.getElementById('email').value.trim() || 'Not provided';
         const phone = document.getElementById('phone').value.trim() || 'Not provided';
         const department = document.getElementById('department').value || 'Not specified';
+        const sectionElement = document.getElementById('section');
+        const section = sectionElement ? sectionElement.value : '';
+        const sectionText = sectionElement && sectionElement.selectedIndex >= 0
+            ? sectionElement.options[sectionElement.selectedIndex].text
+            : 'Not specified';
         const userType = document.getElementById('user_type');
         const userTypeText = userType ? userType.options[userType.selectedIndex].text : 'Student';
         
@@ -1441,6 +1469,7 @@
         const confirmEmail = document.getElementById('confirm-email');
         const confirmPhone = document.getElementById('confirm-phone');
         const confirmDepartment = document.getElementById('confirm-department');
+        const confirmSection = document.getElementById('confirm-section');
         const confirmUserType = document.getElementById('confirm-user-type');
         const confirmImages = document.getElementById('confirm-images');
         
@@ -1449,6 +1478,7 @@
         if (confirmEmail) confirmEmail.textContent = email;
         if (confirmPhone) confirmPhone.textContent = phone;
         if (confirmDepartment) confirmDepartment.textContent = department;
+        if (confirmSection) confirmSection.textContent = section ? sectionText : 'Not specified';
         if (confirmUserType) confirmUserType.textContent = userTypeText;
         if (confirmImages) {
             confirmImages.innerHTML = `<i class="bi bi-check-circle me-1"></i>${capturedEncodings.length} images captured`;
@@ -1465,6 +1495,47 @@
         if (profilePhotoInput && capturedThumbnails.length > 0) {
             profilePhotoInput.value = capturedThumbnails[0];  // First image as profile
         }
+    }
+
+    // Filter section options by selected department so users only see relevant sections
+    function filterSectionsByDepartment() {
+        const deptEl = document.getElementById('department');
+        const sectionEl = document.getElementById('section');
+        if (!deptEl || !sectionEl) return;
+
+        const selectedDept = deptEl.value || '';
+
+        Array.from(sectionEl.options).forEach(opt => {
+            if (!opt.value) { // placeholder option
+                opt.hidden = false;
+                opt.disabled = false;
+                return;
+            }
+            const optDept = opt.getAttribute('data-department') || '';
+            const visible = !selectedDept || optDept === selectedDept;
+            opt.hidden = !visible;
+            opt.disabled = !visible;
+        });
+
+        // If currently selected section is not visible for chosen department, clear it
+        if (sectionEl.selectedIndex >= 0) {
+            const cur = sectionEl.options[sectionEl.selectedIndex];
+            if (cur && cur.disabled) {
+                sectionEl.value = '';
+            }
+        }
+
+        // Update confirmation preview
+        updateConfirmation();
+    }
+
+    // Wire up department -> section filtering
+    const deptSelectEl = document.getElementById('department');
+    const sectionSelectEl = document.getElementById('section');
+    if (deptSelectEl && sectionSelectEl) {
+        deptSelectEl.addEventListener('change', filterSectionsByDepartment);
+        // run once on load to hide irrelevant sections
+        filterSectionsByDepartment();
     }
     
     // ═══════���═══════════════════════════════════════════════════════

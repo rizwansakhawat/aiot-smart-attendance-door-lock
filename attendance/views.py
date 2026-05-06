@@ -11,6 +11,7 @@ import numpy as np
 import os
 import uuid
 from datetime import datetime, timedelta
+from io import BytesIO
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
@@ -24,7 +25,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import Student, Attendance, SystemLog, Department, NotificationState
+from .models import Student, Attendance, SystemLog, Department, NotificationState, Section
 from .services.face_recognition_service import (
     get_face_recognition_service,
 )
@@ -612,12 +613,14 @@ def register_student(request):
     if request.method == 'POST':
         return handle_student_registration(request)
     
-    # Fetch active departments from database
+    # Fetch active departments and sections from database
     departments = Department.objects.filter(is_active=True).values_list('name', flat=True).order_by('name')
+    sections = Section.objects.filter(is_active=True).select_related('department').order_by('department__name', 'name')
     
     context = {
         'camera_index': CAMERA_INDEX,
         'departments': list(departments),
+        'sections': sections,
         'user_types': [
             ('student', 'Student'),
             ('staff', 'Staff'),
@@ -639,6 +642,7 @@ def handle_student_registration(request):
         email = request.POST.get('email', '').strip()
         phone = request.POST.get('phone', '').strip()
         department = request.POST.get('department', '').strip()
+        section_id = request.POST.get('section', '').strip()
         user_type = request.POST.get('user_type', 'student')
         face_encodings_json = request.POST.get('face_encodings', '')
         profile_photo_data = request.POST.get('profile_photo', '')  # Base64 image
@@ -660,6 +664,9 @@ def handle_student_registration(request):
         
         if not department:
             errors.append("Department is required")
+
+        if not section_id:
+            errors.append("Section is required")
         
         if errors:
             for error in errors:
@@ -699,8 +706,12 @@ def handle_student_registration(request):
                 print(f"⚠️ Error saving photo: {e}")
                 # Continue without photo - not critical
         
-        # Get department object
+        # Get department and section objects
         department_obj = Department.objects.filter(name=department).first()
+        section_obj = Section.objects.filter(pk=section_id).first()
+        if section_obj and department_obj and section_obj.department_id != department_obj.id:
+            # Selected section does not belong to selected department
+            errors.append("Selected section does not belong to the selected department")
         
         # Create User account if checkbox is checked
         user = None
@@ -750,6 +761,7 @@ def handle_student_registration(request):
             email=email if email else None,
             phone=phone if phone else None,
             department=department_obj if department_obj else None,
+            section=section_obj if section_obj else None,
             user_type=user_type,
             face_encoding=face_encodings_json,
             photo=saved_photo_path,  # Path to saved image
@@ -1217,6 +1229,7 @@ def reports(request):
     context = {
         'students': Student.objects.filter(is_active=True).order_by('name'),
         'departments': Department.objects.filter(is_active=True).order_by('name'),
+        'sections': Section.objects.filter(is_active=True).order_by('name'),
     }
     return render(request, 'attendance/reports.html', context)
 
@@ -1235,6 +1248,7 @@ def generate_report(request):
     date_to = request.POST.get('date_to', '')
     student_id = request.POST.get('student', '')
     department_id = request.POST.get('department', '')
+    section_id = request.POST.get('section', '')
     format_type = request.POST.get('format', 'html')
     
     records = Attendance.objects.select_related('student')
@@ -1259,6 +1273,10 @@ def generate_report(request):
     if department_id:
         records = records.filter(student__department_id=department_id)
 
+    if section_id:
+        # filter by student's section (Section is a FK on Student)
+        records = records.filter(student__section_id=section_id)
+
     selected_student_name = ''
     if student_id:
         selected_student = Student.objects.filter(pk=student_id).first()
@@ -1270,6 +1288,12 @@ def generate_report(request):
         selected_department = Department.objects.filter(pk=department_id).first()
         if selected_department:
             selected_department_name = selected_department.name
+
+    selected_section_name = ''
+    if section_id:
+        selected_section = Section.objects.filter(pk=section_id).first()
+        if selected_section:
+            selected_section_name = selected_section.name
 
     student_scope = Student.objects.filter(is_active=True)
     if student_id:
@@ -1322,6 +1346,7 @@ def generate_report(request):
         'date_to': date_to,
         'selected_student_name': selected_student_name,
         'selected_department_name': selected_department_name,
+        'selected_section_name': selected_section_name,
         'total_records': total_records,
         'total_success': total_success,
         'total_denied': total_denied,
@@ -1332,8 +1357,273 @@ def generate_report(request):
     
     if format_type == 'excel':
         return generate_excel_report(records, summary, request)
+
+    if format_type == 'pdf':
+        return generate_pdf_report(records, request)
     
     return render(request, 'attendance/report_result.html', context)
+
+
+def generate_pdf_report(records, request):
+    """Generate a professional PDF attendance report."""
+    try:
+        from reportlab.lib import colors  # type: ignore[import-not-found]
+        from reportlab.lib.pagesizes import A4  # type: ignore[import-not-found]
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore[import-not-found]
+        from reportlab.lib.units import mm  # type: ignore[import-not-found]
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image  # type: ignore[import-not-found]
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=16 * mm,
+            rightMargin=16 * mm,
+            topMargin=14 * mm,
+            bottomMargin=14 * mm,
+            title='Attendance Report',
+        )
+
+        styles = getSampleStyleSheet()
+        style_uni = ParagraphStyle(
+            'UniTitle',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            textColor=colors.HexColor('#111827'),
+            alignment=1,
+            leading=22,
+        )
+        style_report = ParagraphStyle(
+            'ReportTitle',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            textColor=colors.HexColor('#2563EB'),
+            alignment=1,
+            leading=14,
+        )
+        style_meta = ParagraphStyle(
+            'Meta',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10,
+            textColor=colors.HexColor('#1F2937'),
+            alignment=0,
+            leading=13,
+        )
+        style_summary = ParagraphStyle(
+            'Summary',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            textColor=colors.HexColor('#1E3A8A'),
+            alignment=1,
+        )
+        style_footer = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontName='Helvetica-Oblique',
+            fontSize=8,
+            textColor=colors.HexColor('#6B7280'),
+            alignment=2,
+        )
+
+        dept_id = request.POST.get('department', '') if hasattr(request, 'POST') else ''
+        sec_id = request.POST.get('section', '') if hasattr(request, 'POST') else ''
+        date_from = request.POST.get('date_from', '') if hasattr(request, 'POST') else ''
+        date_to = request.POST.get('date_to', '') if hasattr(request, 'POST') else ''
+        subject_name = request.POST.get('subject', '').strip() if hasattr(request, 'POST') else ''
+
+        dept_name = 'All Departments'
+        if dept_id:
+            dept = Department.objects.filter(pk=dept_id).first()
+            if dept:
+                dept_name = dept.name
+
+        sec_name = 'All Sections'
+        if sec_id:
+            sec = Section.objects.filter(pk=sec_id).first()
+            if sec:
+                sec_name = sec.name
+
+        if date_from and date_to and date_from == date_to:
+            date_label = date_from
+        elif date_from and date_to:
+            date_label = f'{date_from} to {date_to}'
+        elif date_from:
+            date_label = f'From {date_from}'
+        elif date_to:
+            date_label = f'Up to {date_to}'
+        else:
+            date_label = 'All Dates'
+
+        total_entries = records.count()
+        present_entries = records.filter(entry_type='success').count()
+        unique_students = records.exclude(student__isnull=True).values('student').distinct().count()
+
+        logo_path = None
+        logo_candidates = []
+        static_root = str(settings.STATIC_ROOT) if getattr(settings, 'STATIC_ROOT', None) else ''
+        media_root = str(settings.MEDIA_ROOT) if getattr(settings, 'MEDIA_ROOT', None) else ''
+        base_dir = str(settings.BASE_DIR) if getattr(settings, 'BASE_DIR', None) else ''
+        if static_root:
+            logo_candidates += [
+                os.path.join(static_root, 'images', 'logo.png'),
+                os.path.join(static_root, 'logo.png'),
+            ]
+        if media_root:
+            logo_candidates += [
+                os.path.join(media_root, 'logo.png'),
+                os.path.join(media_root, 'images', 'logo.png'),
+            ]
+        if base_dir:
+            logo_candidates += [
+                os.path.join(base_dir, 'static', 'images', 'logo.png'),
+                os.path.join(base_dir, 'static', 'logo.png'),
+            ]
+        for cand in logo_candidates:
+            if cand and os.path.isfile(cand):
+                logo_path = cand
+                break
+
+        story = []
+
+        heading_text = Paragraph(
+            'The Islamia University of Bahawalpur<br/><font size="11" color="#2563EB"><b>Faculty of Computing </b></font>',
+            style_uni,
+        )
+        if logo_path:
+            logo = Image(logo_path, width=20 * mm, height=20 * mm)
+            heading_table = Table([[logo, heading_text]], colWidths=[24 * mm, 162 * mm])
+            heading_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(heading_table)
+        else:
+            story.append(Paragraph('The Islamia University of Bahawalpur', style_uni))
+            story.append(Paragraph('Faculty of Computing ', style_report))
+
+        story.append(Spacer(1, 5))
+
+        meta_rows = [
+            [Paragraph(f'<b>Date:</b> {date_label}', style_meta), Paragraph('', style_meta)],
+            [Paragraph(f'<b>Department:</b> {dept_name}', style_meta), Paragraph(f'<b>Section:</b> {sec_name}', style_meta)],
+        ]
+        if subject_name:
+            meta_rows.append([Paragraph(f'<b>Subject:</b> {subject_name}', style_meta), Paragraph('', style_meta)])
+
+        meta_table = Table(meta_rows, colWidths=[93 * mm, 93 * mm])
+        meta_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F1F5F9')),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#CBD5E1')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(meta_table)
+        story.append(Spacer(1, 7))
+
+        summary_table = Table([
+            [
+                Paragraph(f'Total Entries: {total_entries}', style_summary),
+                Paragraph(f'Present: {present_entries}', style_summary),
+                Paragraph(f'', style_summary),
+            ]
+        ], colWidths=[62 * mm, 62 * mm, 62 * mm])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#DBEAFE')),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#93C5FD')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#BFDBFE')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        story.append(summary_table)
+        story.append(Spacer(1, 8))
+
+        table_data = [['Sr.', 'Name', 'Roll Number', 'Date', 'Time', 'Status']]
+        row_status = []
+        for idx, record in enumerate(records[:1000], 1):
+            local_ts = timezone.localtime(record.timestamp) if timezone.is_aware(record.timestamp) else record.timestamp
+            status_text = 'Present' if record.entry_type == 'success' else 'Denied'
+            row_status.append(status_text)
+            table_data.append([
+                str(idx),
+                record.student.name if record.student else 'Unknown',
+                record.student.roll_number if record.student else 'N/A',
+                local_ts.strftime('%Y-%m-%d'),
+                local_ts.strftime('%I:%M %p').lstrip('0'),
+                status_text,
+            ])
+
+        if len(table_data) == 1:
+            table_data.append(['-', 'No records found for selected filters', '-', '-', '-', '-'])
+
+        attendance_table = Table(
+            table_data,
+            repeatRows=1,
+            colWidths=[12 * mm, 66 * mm, 32 * mm, 24 * mm, 21 * mm, 31 * mm],
+        )
+        table_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E40AF')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8.8),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D1D5DB')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (5, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ]
+
+        for i, status_text in enumerate(row_status, start=1):
+            if status_text == 'Present':
+                table_style.append(('TEXTCOLOR', (5, i), (5, i), colors.HexColor('#166534')))
+            else:
+                table_style.append(('TEXTCOLOR', (5, i), (5, i), colors.HexColor('#B91C1C')))
+
+        attendance_table.setStyle(TableStyle(table_style))
+        story.append(attendance_table)
+        story.append(Spacer(1, 7))
+        story.append(Paragraph('This is a system-generated attendance report.', style_footer))
+
+        def _draw_page_footer(canvas, doc_obj):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 8)
+            canvas.setFillColor(colors.HexColor('#6B7280'))
+            canvas.drawRightString(A4[0] - (16 * mm), 9 * mm, f'Page {doc_obj.page}')
+            canvas.restoreState()
+
+        doc.build(story, onFirstPage=_draw_page_footer, onLaterPages=_draw_page_footer)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        filename = f"attendance_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        messages.error(request, f"Error generating PDF report: {str(e)}")
+        return redirect('reports')
 
 
 def generate_excel_report(records, summary, request):
@@ -1342,7 +1632,7 @@ def generate_excel_report(records, summary, request):
     """
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         
         wb = Workbook()
         ws = wb.active
@@ -1350,18 +1640,134 @@ def generate_excel_report(records, summary, request):
         
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-        
+
+        # Read optional filters from the request to show in header
+        dept_id = request.POST.get('department') if hasattr(request, 'POST') else None
+        sec_id = request.POST.get('section') if hasattr(request, 'POST') else None
+        date_from = request.POST.get('date_from', '') if hasattr(request, 'POST') else ''
+        date_to = request.POST.get('date_to', '') if hasattr(request, 'POST') else ''
+        subject_name = (request.POST.get('subject', '').strip() if hasattr(request, 'POST') else '')
+        dept_name = ''
+        sec_name = ''
+        if dept_id:
+            d = Department.objects.filter(pk=dept_id).first()
+            if d:
+                dept_name = d.name
+        if sec_id:
+            s = Section.objects.filter(pk=sec_id).first()
+            if s:
+                sec_name = s.name
+
+        # Try to embed a logo if available in common locations
+        logo_path = None
+        logo_candidates = []
+        try:
+            static_root = str(settings.STATIC_ROOT) if getattr(settings, 'STATIC_ROOT', None) else ''
+            media_root = str(settings.MEDIA_ROOT) if getattr(settings, 'MEDIA_ROOT', None) else ''
+            base_dir = str(settings.BASE_DIR) if getattr(settings, 'BASE_DIR', None) else ''
+        except Exception:
+            static_root = media_root = base_dir = ''
+
+        if static_root:
+            logo_candidates += [
+                os.path.join(static_root, 'images', 'logo.png'),
+                os.path.join(static_root, 'logo.png'),
+            ]
+        if media_root:
+            logo_candidates += [
+                os.path.join(media_root, 'logo.png'),
+                os.path.join(media_root, 'images', 'logo.png'),
+            ]
+        if base_dir:
+            logo_candidates += [
+                os.path.join(base_dir, 'static', 'images', 'logo.png'),
+                os.path.join(base_dir, 'static', 'logo.png'),
+            ]
+
+        for cand in logo_candidates:
+            try:
+                if cand and os.path.isfile(cand):
+                    logo_path = cand
+                    break
+            except Exception:
+                continue
+
+        # Reserve top rows for a single report info box + logo
+        header_row = 6
+
+        # Insert logo if available
+        if logo_path:
+            try:
+                from openpyxl.drawing.image import Image as XLImage
+                img = XLImage(logo_path)
+                img.width = 120
+                img.height = 60
+                ws.add_image(img, 'A1')
+            except Exception:
+                # if image can't be embedded, ignore and continue
+                pass
+
+        # Draw one clean top box for report metadata
+        box_fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
+        box_border = Border(
+            left=Side(style='thin', color='B8C3E6'),
+            right=Side(style='thin', color='B8C3E6'),
+            top=Side(style='thin', color='B8C3E6'),
+            bottom=Side(style='thin', color='B8C3E6'),
+        )
+        for r in range(1, 5):
+            for c in range(1, 7):
+                cell = ws.cell(row=r, column=c)
+                cell.fill = box_fill
+                cell.border = box_border
+
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=6)
+        title_cell = ws.cell(row=1, column=1, value='The Islamia University of Bahawalpur')
+        title_cell.font = Font(bold=True, size=14, color="1F2A44")
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        date_label = 'All Dates'
+        if date_from and date_to and date_from == date_to:
+            date_label = date_from
+        elif date_from and date_to:
+            date_label = f'{date_from} to {date_to}'
+        elif date_from:
+            date_label = f'From {date_from}'
+        elif date_to:
+            date_label = f'Up to {date_to}'
+
+        dept_label = dept_name if dept_name else 'All Departments'
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=6)
+        dept_cell = ws.cell(row=2, column=1, value=f'Department: {dept_label}')
+        dept_cell.font = Font(bold=False, size=11, color="2B2D42")
+        dept_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        sec_label = sec_name if sec_name else 'All Sections'
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
+        sec_cell = ws.cell(row=3, column=1, value=f'Section: {sec_label}')
+        sec_cell.font = Font(bold=False, size=11, color="2B2D42")
+        sec_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Keep Date + Subject in a single row cell so text remains within one box.
+        ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=6)
+        row4_text = f'Date: {date_label}'
+        if subject_name:
+            row4_text = f'{row4_text}    |    Subject: {subject_name}'
+        row4_cell = ws.cell(row=4, column=1, value=row4_text)
+        row4_cell.font = Font(bold=True, size=11, color="243B6B")
+        row4_cell.alignment = Alignment(horizontal='left', vertical='center', shrink_to_fit=True)
+
         headers = ['Sr.', 'Name', 'Roll Number', 'Date', 'Time', 'Status']
         for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
+            cell = ws.cell(row=header_row, column=col, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
-        
-        for row, record in enumerate(records[:1000], 2):
+
+        for row, record in enumerate(records[:1000], header_row + 1):
             local_timestamp = timezone.localtime(record.timestamp) if timezone.is_aware(record.timestamp) else record.timestamp
             display_time = local_timestamp.strftime('%I:%M %p').lstrip('0')
-            ws.cell(row=row, column=1, value=row-1)
+            ws.cell(row=row, column=1, value=(row - header_row))
             ws.cell(row=row, column=2, value=record.student.name if record.student else 'Unknown')
             ws.cell(row=row, column=3, value=record.student.roll_number if record.student else 'N/A')
             ws.cell(row=row, column=4, value=local_timestamp.strftime('%Y-%m-%d'))
@@ -1374,6 +1780,10 @@ def generate_excel_report(records, summary, request):
         ws.column_dimensions['D'].width = 12
         ws.column_dimensions['E'].width = 10
         ws.column_dimensions['F'].width = 10
+        ws.row_dimensions[1].height = 24
+        ws.row_dimensions[2].height = 20
+        ws.row_dimensions[3].height = 20
+        ws.row_dimensions[4].height = 20
         
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

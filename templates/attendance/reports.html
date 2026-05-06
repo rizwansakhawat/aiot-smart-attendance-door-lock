@@ -135,6 +135,12 @@
         gap: 6px;
     }
 
+    .quick-date-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+    }
+
     @media (max-width: 767px) {
         .report-card {
             padding: 20px;
@@ -202,6 +208,11 @@
                             <input type="date" name="date_to" class="form-control" required>
                         </div>
                     </div>
+                    <div class="quick-date-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="today-only-btn">
+                            <i class="bi bi-calendar-check me-1"></i>Today Only
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Department Filter -->
@@ -210,12 +221,31 @@
                         <span><i class="bi bi-building me-2"></i>Department</span>
                     </h6>
                     <p class="section-help">Optional for Daily/Summary reports.</p>
-                    <select name="department" class="form-select">
-                        <option value="">All Departments</option>
-                        {% for department in departments %}
-                        <option value="{{ department.pk }}">{{ department.name }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <select name="department" class="form-select" id="report-department-select">
+                                <option value="">All Departments</option>
+                                {% for department in departments %}
+                                <option value="{{ department.pk }}">{{ department.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label visually-hidden">Section</label>
+                            <select name="section" class="form-select" id="report-section-select">
+                                <option value="">All Sections</option>
+                                {% for sec in sections %}
+                                <option value="{{ sec.pk }}" data-department="{{ sec.department.pk }}">{{ sec.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h6><i class="bi bi-journal-text me-2"></i>Subject (Optional)</h6>
+                    <p class="section-help">Used in Excel/PDF header when downloading file reports.</p>
+                    <input type="text" name="subject" class="form-control" placeholder="e.g. Mobile App Development">
                 </div>
 
                 <!-- Student Filter (Student Report only) -->
@@ -239,7 +269,7 @@
                 <div class="form-section">
                     <h6><i class="bi bi-file-earmark me-2"></i>Export Format</h6>
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="report-type-btn active w-100">
                                 <input type="radio" name="format" value="html" checked class="d-none">
                                 <i class="bi bi-globe d-block"></i>
@@ -247,12 +277,20 @@
                                 <p>Preview in browser</p>
                             </label>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="report-type-btn w-100">
                                 <input type="radio" name="format" value="excel" class="d-none">
                                 <i class="bi bi-file-earmark-excel d-block text-success"></i>
                                 <h6>Excel Download</h6>
                                 <p>Download .xlsx file</p>
+                            </label>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="report-type-btn w-100">
+                                <input type="radio" name="format" value="pdf" class="d-none">
+                                <i class="bi bi-file-earmark-pdf d-block text-danger"></i>
+                                <h6>PDF Download</h6>
+                                <p>Download professional PDF</p>
                             </label>
                         </div>
                     </div>
@@ -355,6 +393,15 @@
         dateToInput.max = todayString;
     }
 
+    // Quick action: set both dates to today for one-day attendance report.
+    const todayOnlyBtn = document.getElementById('today-only-btn');
+    if (todayOnlyBtn && dateFromInput && dateToInput) {
+        todayOnlyBtn.addEventListener('click', () => {
+            dateFromInput.value = todayString;
+            dateToInput.value = todayString;
+        });
+    }
+
     // Guard against invalid date range before submit.
     const reportForm = document.querySelector('form[action*="generate_report"]');
     if (reportForm && dateFromInput && dateToInput) {
@@ -370,5 +417,50 @@
     // Initialize visual and validation state on first load.
     document.querySelectorAll('.report-type-selector, .form-section').forEach(syncCardState);
     updateReportTypeFilters();
+
+    // Filter section options by selected department
+    function filterSectionsByDepartment() {
+        const deptSelect = document.getElementById('report-department-select');
+        const sectionSelect = document.getElementById('report-section-select');
+        if (!deptSelect || !sectionSelect) return;
+        const selectedDept = deptSelect.value || '';
+
+        // Show all if no department selected
+        let anyVisible = false;
+        sectionSelect.querySelectorAll('option').forEach((opt) => {
+            const optDept = opt.getAttribute('data-department') || '';
+            if (!opt.value) {
+                // keep the "All Sections" option visible
+                opt.hidden = false;
+                opt.disabled = false;
+                return;
+            }
+            if (!selectedDept || optDept === selectedDept) {
+                opt.hidden = false;
+                opt.disabled = false;
+                anyVisible = true;
+            } else {
+                opt.hidden = true;
+                opt.disabled = true;
+            }
+        });
+
+        // If the currently selected section no longer matches, clear it.
+        if (sectionSelect.value) {
+            const currentOpt = sectionSelect.querySelector(`option[value="${sectionSelect.value}"]`);
+            if (currentOpt && currentOpt.disabled) {
+                sectionSelect.value = '';
+            }
+        }
+    }
+
+    const deptSelectEl = document.getElementById('report-department-select');
+    if (deptSelectEl) {
+        deptSelectEl.addEventListener('change', () => {
+            filterSectionsByDepartment();
+        });
+        // run once on load to apply initial filter state
+        filterSectionsByDepartment();
+    }
 </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Student, Attendance, SystemLog, Department
+from .models import Student, Attendance, SystemLog, Department, Section
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
@@ -29,9 +29,9 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'roll_number', 'department', 'user_type', 'status_badge', 'registered_at']
-    list_filter = ['user_type', 'department', 'is_active', 'registered_at']  #department__is_active
-    search_fields = ['name', 'roll_number', 'email', 'phone']
+    list_display = ['name', 'roll_number', 'department', 'section', 'user_type', 'status_badge', 'registered_at']
+    list_filter = ['user_type', 'department', 'section', 'is_active', 'registered_at']  #department__is_active
+    search_fields = ['name', 'roll_number', 'email', 'phone', 'section']
     list_per_page = 20
     date_hierarchy = 'registered_at'
     
@@ -40,7 +40,7 @@ class StudentAdmin(admin.ModelAdmin):
             'fields': ('name', 'roll_number', 'email', 'phone')
         }),
         ('Academic/Work Information', {
-            'fields': ('department', 'user_type')
+            'fields': ('department', 'section', 'user_type')
         }),
         ('Face Recognition Data', {
             'fields': ('face_encoding',),
@@ -133,3 +133,15 @@ class SystemLogAdmin(admin.ModelAdmin):
     def message_preview(self, obj):
         return obj.message[:100] + '...' if len(obj.message) > 100 else obj.message
     message_preview.short_description = 'Message'
+
+
+@admin.register(Section)
+class SectionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'department', 'is_active', 'created_at']
+    list_filter = ['department', 'is_active']
+    search_fields = ['name', 'department__name']
+    readonly_fields = ['created_at']
+    fieldsets = (
+        ('Section Information', {'fields': ('name', 'department')}),
+        ('Status', {'fields': ('is_active', 'created_at')}),
+    )

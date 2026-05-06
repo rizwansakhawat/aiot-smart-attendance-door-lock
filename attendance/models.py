@@ -21,54 +21,85 @@ class Department(models.Model):
         return self.name
 
 
+class Section(models.Model):
+    """Model for academic/organizational sections tied to a Department"""
+    name = models.CharField(max_length=100, verbose_name="Section Name")
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='sections',
+        verbose_name='Department'
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Active Status')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='Created Date')
+
+    class Meta:
+        ordering = ['department__name', 'name']
+        verbose_name = 'Section'
+        verbose_name_plural = 'Sections'
+
+    def __str__(self):
+        try:
+            return f"{self.name} ({self.department.name})"
+        except Exception:
+            return self.name
+
+
 class Student(models.Model):
     """Model for registered students/staff"""
-    
     USER_TYPE_CHOICES = [
         ('student', 'Student'),
         ('staff', 'Staff'),
         ('visitor', 'Visitor'),
     ]
-    
-    #  Link to Django User for login
+
+    # Link to Django User for login
     user = models.OneToOneField(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         related_name='student_profile'
     )
-    
+
     name = models.CharField(max_length=100, verbose_name="Full Name")
     roll_number = models.CharField(max_length=50, unique=True, verbose_name="Roll Number/ID")
     email = models.EmailField(blank=True, null=True, verbose_name="Email Address")
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")
     department = models.ForeignKey(
-        Department, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         verbose_name="Department",
         related_name='students'
     )
+    section = models.ForeignKey(
+        Section,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='students',
+        verbose_name='Section'
+    )
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='student', verbose_name="User Type")
-    
+
     # Face recognition data
     face_encoding = models.TextField(verbose_name="Face Encoding (JSON)")
     photo = models.ImageField(upload_to='faces/', blank=True, null=True, verbose_name="Profile Photo")
-    
+
     # Status
     is_active = models.BooleanField(default=True, verbose_name="Active Status")
     registered_at = models.DateTimeField(default=timezone.now, verbose_name="Registration Date")
-    
+
     class Meta:
         ordering = ['name']
         verbose_name = 'Student/Staff'
         verbose_name_plural = 'Students/Staff'
-    
+
     def __str__(self):
         return f"{self.name} ({self.roll_number})"
-    
+
     def get_face_encodings(self):
         """Get face encodings as Python list"""
         try:

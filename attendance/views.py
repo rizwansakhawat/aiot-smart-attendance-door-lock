@@ -1359,11 +1359,13 @@ def generate_excel_report(records, summary, request):
             cell.alignment = Alignment(horizontal='center')
         
         for row, record in enumerate(records[:1000], 2):
+            local_timestamp = timezone.localtime(record.timestamp) if timezone.is_aware(record.timestamp) else record.timestamp
+            display_time = local_timestamp.strftime('%I:%M %p').lstrip('0')
             ws.cell(row=row, column=1, value=row-1)
             ws.cell(row=row, column=2, value=record.student.name if record.student else 'Unknown')
             ws.cell(row=row, column=3, value=record.student.roll_number if record.student else 'N/A')
-            ws.cell(row=row, column=4, value=record.timestamp.strftime('%Y-%m-%d'))
-            ws.cell(row=row, column=5, value=record.timestamp.strftime('%H:%M:%S'))
+            ws.cell(row=row, column=4, value=local_timestamp.strftime('%Y-%m-%d'))
+            ws.cell(row=row, column=5, value=display_time)
             ws.cell(row=row, column=6, value='Present')
         
         ws.column_dimensions['A'].width = 8

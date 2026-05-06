@@ -557,7 +557,7 @@
                     <td>{{ record.student.name|default:"Unknown" }}</td>
                     <td>{{ record.student.roll_number|default:"-" }}</td>
                     <td>{{ record.timestamp|date:"Y-m-d" }}</td>
-                    <td>{{ record.timestamp|time:"H:i:s" }}</td>
+                    <td>{{ record.timestamp|time:"g:i A" }}</td>
                     <td>
                         <span class="status-pill success"><i class="bi bi-check-circle-fill"></i>Allowed</span>
                     </td>

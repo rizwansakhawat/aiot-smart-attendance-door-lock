@@ -327,21 +327,30 @@
         });
     });
 
+    // Build date strings from local time (not UTC) so browser datepicker limits stay consistent.
+    function toLocalDateInputValue(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     // Set default dates only when fields are empty.
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const todayString = toLocalDateInputValue(today);
+    const firstDayString = toLocalDateInputValue(firstDay);
 
     const dateFromInput = document.querySelector('input[name="date_from"]');
     const dateToInput = document.querySelector('input[name="date_to"]');
     if (dateFromInput && !dateFromInput.value) {
-        dateFromInput.valueAsDate = firstDay;
+        dateFromInput.value = firstDayString;
     }
     if (dateToInput && !dateToInput.value) {
-        dateToInput.valueAsDate = today;
+        dateToInput.value = todayString;
     }
 
     if (dateFromInput && dateToInput) {
-        const todayString = today.toISOString().split('T')[0];
         dateFromInput.max = todayString;
         dateToInput.max = todayString;
     }

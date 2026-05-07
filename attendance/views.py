@@ -1001,6 +1001,7 @@ def student_list(request):
     """
     search = request.GET.get('search', '')
     department = request.GET.get('department', '')
+    section = request.GET.get('section', '')
     user_type = request.GET.get('user_type', '')
     status = request.GET.get('status', '')
     
@@ -1015,6 +1016,9 @@ def student_list(request):
     
     if department:
         students = students.filter(department__name__iexact=department)
+
+    if section:
+        students = students.filter(section__name__iexact=section)
     
     if user_type:
         students = students.filter(user_type__iexact=user_type)
@@ -1024,6 +1028,24 @@ def student_list(request):
             students = students.filter(is_active=True)
         elif status == 'inactive':
             students = students.filter(is_active=False)
+
+    scope_students = Student.objects.filter(is_active=True)
+    if department:
+        scope_students = scope_students.filter(department__name__iexact=department)
+    if section:
+        scope_students = scope_students.filter(section__name__iexact=section)
+
+    scope_total_students = scope_students.count()
+    if department and section:
+        students_scope_label = f'Department: {department} | Section: {section}'
+    elif section:
+        students_scope_label = f'Section: {section}'
+    elif department:
+        students_scope_label = f'Department: {department}'
+    else:
+        students_scope_label = 'All Active Students'
+
+    filtered_students_count = students.count()
     
     paginator = Paginator(students, 20)
     page_number = request.GET.get('page')
@@ -1031,14 +1053,20 @@ def student_list(request):
     
     # Get unique active departments from database
     departments = Department.objects.filter(is_active=True).values_list('name', flat=True).order_by('name')
+    sections = Section.objects.filter(is_active=True).select_related('department').order_by('department__name', 'name')
     
     context = {
         'page_obj': page_obj,
         'students': page_obj,
         'total_students': students.count(),
+        'scope_total_students': scope_total_students,
+        'filtered_students_count': filtered_students_count,
+        'students_scope_label': students_scope_label,
         'departments': list(departments),
+        'sections': sections,
         'search': search,
         'selected_department': department,
+        'selected_section': section,
         'selected_user_type': user_type,
         'selected_status': status,
     }
@@ -1330,7 +1358,11 @@ def generate_report(request):
     total_success = success_records.count()
     total_denied = 0
     unique_students = records.exclude(student__isnull=True).values('student').distinct().count()
-    total_students = student_scope.count()
+    if department_id:
+        student_scope = student_scope.filter(department_id=department_id)
+    if section_id:
+        student_scope = student_scope.filter(section_id=section_id)
+    scope_total_students = student_scope.count()
     active_days = success_records.values('timestamp__date').distinct().count()
     avg_per_day = round((total_success / active_days), 1) if active_days > 0 else 0
 
@@ -1351,7 +1383,7 @@ def generate_report(request):
         'total_success': total_success,
         'total_denied': total_denied,
         'unique_students': unique_students,
-        'total_students': total_students,
+        'scope_total_students': scope_total_students,
         'avg_per_day': avg_per_day,
     }
     
@@ -1458,6 +1490,15 @@ def generate_pdf_report(records, request):
         else:
             date_label = 'All Dates'
 
+        generated_at = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %I:%M %p')
+
+        student_scope = Student.objects.filter(is_active=True)
+        if dept_id:
+            student_scope = student_scope.filter(department__name__iexact=dept_name)
+        if sec_id:
+            student_scope = student_scope.filter(section__name__iexact=sec_name)
+
+        total_students_scope = student_scope.count()
         total_entries = records.count()
         present_entries = records.filter(entry_type='success').count()
         unique_students = records.exclude(student__isnull=True).values('student').distinct().count()
@@ -1513,8 +1554,9 @@ def generate_pdf_report(records, request):
         story.append(Spacer(1, 5))
 
         meta_rows = [
-            [Paragraph(f'<b>Date:</b> {date_label}', style_meta), Paragraph('', style_meta)],
             [Paragraph(f'<b>Department:</b> {dept_name}', style_meta), Paragraph(f'<b>Section:</b> {sec_name}', style_meta)],
+            [Paragraph(f'<b>Date:</b> {date_label}', style_meta), Paragraph('', style_meta)],
+            
         ]
         if subject_name:
             meta_rows.append([Paragraph(f'<b>Subject:</b> {subject_name}', style_meta), Paragraph('', style_meta)])
@@ -1535,9 +1577,10 @@ def generate_pdf_report(records, request):
 
         summary_table = Table([
             [
-                Paragraph(f'Total Entries: {total_entries}', style_summary),
-                Paragraph(f'Present: {present_entries}', style_summary),
+                Paragraph(f'Total Students: {total_students_scope}', style_summary),
+                Paragraph(f'Present Students: {unique_students}', style_summary),
                 Paragraph(f'', style_summary),
+
             ]
         ], colWidths=[62 * mm, 62 * mm, 62 * mm])
         summary_table.setStyle(TableStyle([
@@ -1604,7 +1647,7 @@ def generate_pdf_report(records, request):
         attendance_table.setStyle(TableStyle(table_style))
         story.append(attendance_table)
         story.append(Spacer(1, 7))
-        story.append(Paragraph('This is a system-generated attendance report.', style_footer))
+        story.append(Paragraph(f'This is a system-generated attendance report. Generated on: {generated_at}', style_footer))
 
         def _draw_page_footer(canvas, doc_obj):
             canvas.saveState()

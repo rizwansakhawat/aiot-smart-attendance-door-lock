@@ -366,8 +366,8 @@
         <div class="hero-metrics hero-metrics--action">
             <span class="hero-metric-icon"><i class="bi bi-people"></i></span>
             <div>
-                <div class="hero-metric-value">{{ total_students }}</div>
-                <div class="hero-metric-label">All Users</div>
+                <div class="hero-metric-value">{{ filtered_students_count }}</div>
+                <div class="hero-metric-label">{{ students_scope_label }}</div>
             </div>
         </div>
     </div>
@@ -388,6 +388,17 @@
                 {% for dept in departments %}
                 <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>
                     {{ dept }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Section</label>
+            <select name="section" class="form-select" id="student-section-filter">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec.name }}" data-department="{{ sec.department.name }}" {% if selected_section == sec.name %}selected{% endif %}>
+                    {{ sec.name }}
                 </option>
                 {% endfor %}
             </select>
@@ -492,7 +503,7 @@
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_section %}&section={{ selected_section }}{% endif %}{% if selected_user_type %}&user_type={{ selected_user_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
                     <i class="bi bi-chevron-left"></i>
                 </a>
             </li>
@@ -503,19 +514,19 @@
                 <li class="page-item active"><span class="page-link">{{ num }}</span></li>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}">{{ num }}</a>
+                    <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_section %}&section={{ selected_section }}{% endif %}{% if selected_user_type %}&user_type={{ selected_user_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">{{ num }}</a>
                 </li>
             {% endif %}
         {% endfor %}
         
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_section %}&section={{ selected_section }}{% endif %}{% if selected_user_type %}&user_type={{ selected_user_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
                     <i class="bi bi-chevron-right"></i>
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_section %}&section={{ selected_section }}{% endif %}{% if selected_user_type %}&user_type={{ selected_user_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
                     <i class="bi bi-chevron-double-right"></i>
                 </a>
             </li>
@@ -583,6 +594,43 @@
                 }, 500);
             }, 5000);
         });
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const departmentSelect = document.querySelector('select[name="department"]');
+        const sectionSelect = document.getElementById('student-section-filter');
+
+        function filterSections() {
+            if (!departmentSelect || !sectionSelect) return;
+            const selectedDepartment = departmentSelect.value || '';
+
+            sectionSelect.querySelectorAll('option').forEach(function (option) {
+                if (!option.value) {
+                    option.hidden = false;
+                    option.disabled = false;
+                    return;
+                }
+
+                const optionDepartment = option.getAttribute('data-department') || '';
+                const matches = !selectedDepartment || optionDepartment === selectedDepartment;
+                option.hidden = !matches;
+                option.disabled = !matches;
+            });
+
+            if (sectionSelect.value) {
+                const currentOption = sectionSelect.querySelector(`option[value="${sectionSelect.value}"]`);
+                if (currentOption && currentOption.disabled) {
+                    sectionSelect.value = '';
+                }
+            }
+        }
+
+        if (departmentSelect && sectionSelect) {
+            departmentSelect.addEventListener('change', filterSections);
+            filterSections();
+        }
     });
 </script>
 {% endblock %}

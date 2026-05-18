@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
 
+
 # ═══════════════════════════════════════════════════════════════════
 # CAMERA CONFIGURATION - IMPORTANT!
 # ═══════════════════════════════════════════════════════════════════
@@ -140,7 +141,11 @@ class FaceRecognitionService:
         
         # Settings
         self.min_face_size = 100  # Minimum face size in pixels
-        self.max_image_size = (640, 480)  # Resize large images for speed
+        self.max_image_size = (
+            int(getattr(settings, 'FACE_RECOGNITION_MAX_IMAGE_WIDTH', 480)),
+            int(getattr(settings, 'FACE_RECOGNITION_MAX_IMAGE_HEIGHT', 360)),
+        )  # Smaller default keeps live recognition responsive
+        self.detection_upsample = int(getattr(settings, 'FACE_RECOGNITION_UPSAMPLE', 0))
         
         print("=" * 50)
         print("🧠 Face Recognition Service initialized")
@@ -184,7 +189,7 @@ class FaceRecognitionService:
         face_locations = face_recognition.face_locations(
             rgb_image,
             model=self.model,
-            number_of_times_to_upsample=1
+            number_of_times_to_upsample=self.detection_upsample
         )
         
         return face_locations
@@ -261,7 +266,11 @@ class FaceRecognitionService:
         
         # Detect face if location not provided
         if face_location is None:
-            face_locations = face_recognition.face_locations(rgb_image, model=self.model)
+            face_locations = face_recognition.face_locations(
+                rgb_image,
+                model=self.model,
+                number_of_times_to_upsample=self.detection_upsample,
+            )
             if not face_locations:
                 return None
             face_location = face_locations[0]

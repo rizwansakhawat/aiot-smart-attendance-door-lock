@@ -85,12 +85,19 @@ LIVE_DOOR_PERSON_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_DOOR_PERSON_CO
 LIVE_UNKNOWN_ALERT_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_SECONDS', 5))
 LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS = float(getattr(settings, 'LIVE_UNKNOWN_ALERT_COOLDOWN_SECONDS', 30))
 LIVE_FALLBACK_MIN_INTERVAL_SECONDS = float(getattr(settings, 'LIVE_FALLBACK_MIN_INTERVAL_SECONDS', 2.5))
+DISPLAY_WINDOW_WIDTH = int(getattr(settings, 'DISPLAY_WINDOW_WIDTH', 960))
+DISPLAY_WINDOW_HEIGHT = int(getattr(settings, 'DISPLAY_WINDOW_HEIGHT', 720))
 DOOR_COMMAND_FILE = os.path.join(PROJECT_DIR, 'media', 'runtime', 'door_system_command.json')
 
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════
+
+def setup_display_window(window_name):
+    """Create a consistent display window size for live camera views."""
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window_name, DISPLAY_WINDOW_WIDTH, DISPLAY_WINDOW_HEIGHT)
 
 def find_arduino_port():
     """Auto-detect Arduino COM port"""
@@ -164,7 +171,7 @@ def consume_runtime_command():
 
 
 def build_unlock_command(student_name=None):
-    """Build an Arduino UNLOCK command with an optional LCD-safe user name."""
+    """Build an Arduino UNLOCK command with an optional sanitized user name."""
     if not student_name:
         return "UNLOCK"
 
@@ -174,7 +181,7 @@ def build_unlock_command(student_name=None):
     if not cleaned:
         return "UNLOCK"
 
-    # 16 characters keeps the LCD second line clean on 16x2 displays.
+    # Keep the serial payload short and clean for the Arduino side.
     return f"UNLOCK:{cleaned[:16]}"
 
 
@@ -262,7 +269,6 @@ def print_access_granted_block(student_name, confidence):
     print("\n  ╔════════════════════════════════════════════╗")
     print(f"  ║  ✅ ACCESS GRANTED: {student_name[:25].ljust(25)}║")
     print("  ╚════════════════════════════════════════════╝")
-    print(f"  📊 Final Confidence: {confidence:.1%}")
     print()
     print("  ┌──────────────────────────────────────────┐")
     print("  │  ➡️  Sending UNLOCK command to Arduino   │")
@@ -739,8 +745,7 @@ class DoorSystem:
         print("  • PIR window timeout with no known face = admin alert")
         print("═" * 58 + "\n")
 
-        cv2.namedWindow('Full Mode', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Full Mode', 1000, 750)
+        setup_display_window('Full Mode')
 
         pir_window_active = False
         motion_deadline = 0
@@ -751,13 +756,14 @@ class DoorSystem:
         first_timeout_alert_sent = False
         unknown_visible_since = 0
         unknown_last_seen_time = 0
-        detection_scale = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
-        detection_upsample = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
+        detection_scale = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.4))
+        detection_upsample = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 0))
         last_result_text = "Continuous scanning active..."
         last_result_color = (180, 180, 180)
         result_time = 0
         status_messages = []
         status_time = 0
+        last_multi_output_time = 0
 
         try:
             while self.running:
@@ -879,13 +885,15 @@ class DoorSystem:
                                         if best_distance <= RECOGNITION_TOLERANCE and is_separated:
                                             candidate = self.face_service.known_students[best_idx]
                                             candidate_conf = 1 - best_distance
-                                            face_name = candidate.name
                                             face_conf = candidate_conf
 
                                             if candidate_conf >= MIN_MATCH_CONFIDENCE:
+                                                face_name = candidate.name
                                                 face_color = (0, 255, 0)
                                             else:
-                                                face_color = (0, 165, 255)
+                                                face_name = "Unknown"
+                                                face_conf = 0
+                                                face_color = (0, 0, 255)
 
                                             if candidate_conf >= MIN_MATCH_CONFIDENCE and candidate_conf > best_confidence:
                                                 best_student = candidate
@@ -900,6 +908,16 @@ class DoorSystem:
 
                             student = best_student
                             confidence = best_confidence
+
+                            if len(detected_faces) > 1:
+                                names = [face['name'] for face in detected_faces]
+                                multi_text = f"👥 Multiple detected: {', '.join(names[:4])}"
+                                status_messages.append(multi_text)
+                                status_time = current_time
+
+                                if current_time - last_multi_output_time >= 2:
+                                    print(f"  {multi_text}")
+                                    last_multi_output_time = current_time
 
                     except Exception as e:
                         print(f"  ❌ Full Mode detect error: {e}")
@@ -916,7 +934,6 @@ class DoorSystem:
                         votes = recognition_votes.get(student.id, 0) + 1
                         recognition_votes[student.id] = votes
                         print(f"  ✅ Recognized: {student.name}")
-                        print(f"  📊 Confidence: {confidence:.1%}")
                         print(f"  🔎 Confirmation: {votes}/{REQUIRED_CONFIRM_FRAMES}")
 
                         if votes >= REQUIRED_CONFIRM_FRAMES:
@@ -995,16 +1012,16 @@ class DoorSystem:
                             status_messages = [f"ℹ️ Unknown must persist {wait_left}s more for repeat alert"]
                             status_time = current_time
 
-                cv2.rectangle(display, (0, 0), (w, 90), (35, 35, 35), -1)
+                cv2.rectangle(display, (0, 0), (w, 62), (35, 35, 35), -1)
                 cv2.putText(display, "FULL MODE - LIVE CAMERA + PIR",
-                           (15, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 0), 2)
+                           (15, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 0), 2)
 
                 mode_text = "Continuous face scan active"
                 if pir_window_active:
                     remaining = max(0, int(motion_deadline - current_time))
                     mode_text = f"PIR active |timeout {remaining}sec|"
                 cv2.putText(display, mode_text,
-                           (15, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+                           (15, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1)
 
                 for face in detected_faces:
                     top, right, bottom, left = face['location']
@@ -1015,8 +1032,6 @@ class DoorSystem:
                     cv2.rectangle(display, (left, top), (right, bottom), color, 2)
 
                     label = name
-                    if conf > 0:
-                        label += f" ({conf:.0%})"
 
                     text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
                     cv2.rectangle(
@@ -1113,7 +1128,6 @@ class DoorSystem:
                 votes = recognition_votes.get(student.id, 0) + 1
                 recognition_votes[student.id] = votes
                 print(f"  ✅ Recognized: {student.name}")
-                print(f"  📊 Confidence: {confidence:.1%}")
                 print(f"  🔎 Confirmation: {votes}/{REQUIRED_CONFIRM_FRAMES}")
 
                 if votes >= REQUIRED_CONFIRM_FRAMES:
@@ -1297,12 +1311,13 @@ def live_view():
     
     print("\n   Press Q to quit\n")
     
-    cv2.namedWindow('Live View', cv2.WINDOW_NORMAL)
+    setup_display_window('Live View')
     
     last_time = 0
     interval = 0.8
     current_text = "Scanning..."
     current_color = (200, 200, 200)
+    current_face_location = None
     
     try:
         while True:
@@ -1321,21 +1336,27 @@ def live_view():
                     result = service.recognize_face(frame)
                     if result['success']:
                         name = result['student'].name
-                        conf = result['confidence']
-                        current_text = f"{name} ({conf:.0%})"
+                        current_text = name
                         current_color = (0, 220, 0)
+                        current_face_location = result.get('face_location')
                     else:
                         current_text = "Unknown"
                         current_color = (0, 0, 220)
+                        current_face_location = result.get('face_location')
                 except:
                     current_text = "Error"
                     current_color = (0, 0, 220)
+                    current_face_location = None
                 last_time = now
             
             # Draw
-            cv2.rectangle(display, (0, 0), (display.shape[1], 55), (0, 0, 0), -1)
-            cv2.putText(display, current_text, (15, 40), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.1, current_color, 2)
+            cv2.rectangle(display, (0, 0), (display.shape[1], 36), (0, 0, 0), -1)
+            cv2.putText(display, current_text, (15, 26), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.72, current_color, 2)
+
+            if current_face_location is not None:
+                top, right, bottom, left = current_face_location
+                cv2.rectangle(display, (left, top), (right, bottom), current_color, 2)
             
             cv2.imshow('Live View', display)
             
@@ -1442,8 +1463,7 @@ def live_camera_attendance():
     
     log_system('success', 'Live camera attendance (multi-user) started')
     
-    cv2.namedWindow('Live Attendance - Multi User', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Live Attendance - Multi User', 1000, 750)
+    setup_display_window('Live Attendance - Multi User')
     
     last_recognition_time = 0
     detected_faces = []  # List of (name, location, color, status)
@@ -1461,6 +1481,7 @@ def live_camera_attendance():
     # Status messages (shown at bottom)
     status_messages = []
     status_time = 0
+    last_multi_output_time = 0
     
     try:
         while True:
@@ -1478,7 +1499,7 @@ def live_camera_attendance():
                         ok, _ = conn.connect_camera(CAMERA_INDEX)
                         if ok:
                             print("   ✅ Camera reconnected!")
-                            cv2.namedWindow('Live Attendance - Multi User', cv2.WINDOW_NORMAL)
+                            setup_display_window('Live Attendance - Multi User')
                             break
                         time.sleep(RECONNECT_WAIT_TIME)
                     else:
@@ -1598,7 +1619,7 @@ def live_camera_attendance():
                                             recent_confirms[student.id] = (confirm_count, current_time)
 
                                             if confirm_count < REQUIRED_CONFIRM_FRAMES:
-                                                color = (255, 200, 0)
+                                                color = (0, 255, 0)
                                                 status = "confirming"
                                                 status_messages.append(
                                                     f"🔎 {name} confirming {confirm_count}/{REQUIRED_CONFIRM_FRAMES}"
@@ -1616,8 +1637,8 @@ def live_camera_attendance():
                                                     color = (0, 255, 0)  # Green
                                                     status = "marked"
                                                     
-                                                    status_messages.append(f"✅ MARKED: {name}")
-                                                    print(f"✅ Attendance marked: {name} ({confidence:.0%})")
+                                                    status_messages.append(f"✅ {name}")
+                                                    print(f"✅ Attendance: {name}")
                                                     
                                                     # Sound
                                                     try:
@@ -1626,7 +1647,7 @@ def live_camera_attendance():
                                                     except:
                                                         pass
                                                 else:
-                                                    color = (0, 255, 255)  # Yellow
+                                                    color = (0, 255, 0)
                                                     status = "already"
                                                     status_messages.append(f"ℹ️ {name} (Already today)")
 
@@ -1635,10 +1656,12 @@ def live_camera_attendance():
                                                 recent_attendance[student.id] = current_time
                                             else:
                                                 # Cooldown
-                                                color = (255, 165, 0)  # Orange
+                                                color = (0, 255, 0)
                                                 status = "cooldown"
                                         else:
-                                            color = (0, 165, 255)  # Orange-ish
+                                            name = "Unknown"
+                                            confidence = 0
+                                            color = (0, 0, 255)
                                             status = "low_conf"
                             
                             # Add to detected faces
@@ -1653,6 +1676,15 @@ def live_camera_attendance():
                             if status == 'unknown':
                                 unknown_detected_this_cycle = True
                                 last_unknown_frame = frame.copy()
+
+                        if len(detected_faces) > 1:
+                            names = [face['name'] for face in detected_faces]
+                            multi_text = f"👥 Multiple detected: {', '.join(names[:4])}"
+                            status_messages.append(multi_text)
+
+                            if current_time - last_multi_output_time >= 2:
+                                print(multi_text)
+                                last_multi_output_time = current_time
 
                     if unknown_detected_this_cycle:
                         if unknown_start_time is None:
@@ -1690,21 +1722,21 @@ def live_camera_attendance():
             # ─────────────────────────────────────────────────
             # Draw UI - Header
             # ─────────────────────────────────────────────────
-            cv2.rectangle(display, (0, 0), (w, 85), (40, 40, 40), -1)
+            cv2.rectangle(display, (0, 0), (w, 62), (40, 40, 40), -1)
             cv2.putText(display, "LIVE ATTENDANCE - MULTI USER", 
-                       (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                       (15, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 0), 2)
             
             # Stats
             elapsed = int(current_time - session_start)
             elapsed_str = f"{elapsed // 60}:{elapsed % 60:02d}"
             stats_text = f"Today: {today_count}/{total} | Session: {session_marked} | Faces: {len(detected_faces)} | Time: {elapsed_str}"
             cv2.putText(display, stats_text, 
-                       (15, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+                       (15, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1)
             
             # Live indicator
-            cv2.circle(display, (w - 25, 40), 12, (0, 0, 255), -1)
-            cv2.putText(display, "LIVE", (w - 75, 45), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.circle(display, (w - 20, 31), 8, (0, 0, 255), -1)
+            cv2.putText(display, "LIVE", (w - 55, 35), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.36, (255, 255, 255), 1)
             
             # ─────────────────────────────────────────────────
             # Draw face boxes and names
@@ -1713,15 +1745,12 @@ def live_camera_attendance():
                 top, right, bottom, left = face['location']
                 color = face['color']
                 name = face['name']
-                conf = face.get('confidence', 0)
                 
                 # Draw rectangle
                 cv2.rectangle(display, (left, top), (right, bottom), color, 2)
                 
                 # Draw name background
                 name_text = f"{name}"
-                if conf > 0:
-                    name_text += f" ({conf:.0%})"
                 
                 text_size = cv2.getTextSize(name_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                 cv2.rectangle(display, 
@@ -1745,7 +1774,7 @@ def live_camera_attendance():
                 for i, msg in enumerate(status_messages[:5]):  # Max 5 messages
                     y = h - msg_height + 30 + (i * 35)
                     
-                    if "MARKED" in msg:
+                    if msg.startswith("✅"):
                         color = (0, 255, 0)
                     elif "Already" in msg:
                         color = (0, 255, 255)
@@ -1797,11 +1826,11 @@ def live_camera_attendance():
         print("  📊 SESSION SUMMARY")
         print("  ─────────────────────────────────────────────────────")
         print(f"  • Duration        : {elapsed_str}")
-        print(f"  • Attendance marked: {session_marked}")
+        print(f"  • Attendance      : {session_marked}")
         print(f"  • Total today     : {today_count}/{total}")
         print("═" * 58)
         
-        log_system('info', f'Live attendance ended. Marked: {session_marked}')
+        log_system('info', f'Live attendance ended. Attendance: {session_marked}')
         print("\n👋 Done!")
 
 
@@ -1834,8 +1863,8 @@ def live_camera_door_lock():
     UNLOCK_DURATION = LIVE_DOOR_UNLOCK_DURATION_SECONDS
     PERSON_COOLDOWN = LIVE_DOOR_PERSON_COOLDOWN_SECONDS
     MIN_CONFIDENCE = MIN_MATCH_CONFIDENCE  # Minimum confidence
-    DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.5))
-    DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 1))
+    DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_SCALE', 0.4))
+    DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_UPSAMPLE', 0))
     FALLBACK_DETECTION_SCALE = float(getattr(settings, 'LIVE_DETECTION_FALLBACK_SCALE', 0.8))
     FALLBACK_DETECTION_UPSAMPLE = int(getattr(settings, 'LIVE_DETECTION_FALLBACK_UPSAMPLE', 1))
     
@@ -1913,8 +1942,7 @@ def live_camera_door_lock():
     
     log_system('success', 'Live camera door lock started')
     
-    cv2.namedWindow('Live Door Lock', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Live Door Lock', 1000, 750)
+    setup_display_window('Live Door Lock')
     
     last_recognition_time = 0
     detected_faces = []
@@ -1933,6 +1961,7 @@ def live_camera_door_lock():
     # Status messages
     status_messages = []
     status_time = 0
+    last_multi_output_time = 0
     
     try:
         while True:
@@ -1973,7 +2002,7 @@ def live_camera_door_lock():
                         ok, _ = conn.connect_camera(CAMERA_INDEX)
                         if ok:
                             print("   ✅ Camera reconnected!")
-                            cv2.namedWindow('Live Door Lock', cv2.WINDOW_NORMAL)
+                            setup_display_window('Live Door Lock')
                             break
                         time.sleep(RECONNECT_WAIT_TIME)
                     else:
@@ -2101,7 +2130,7 @@ def live_camera_door_lock():
                                             recent_confirms[student.id] = (confirm_count, current_time)
 
                                             if confirm_count < REQUIRED_CONFIRM_FRAMES:
-                                                color = (255, 200, 0)
+                                                color = (0, 255, 0)
                                                 status = "confirming"
                                                 status_messages.append(
                                                     f"🔎 {name} confirming {confirm_count}/{REQUIRED_CONFIRM_FRAMES}"
@@ -2124,7 +2153,7 @@ def live_camera_door_lock():
                                                 status = "unlocked"
                                                 
                                                 status_messages.append(f"🔓 DOOR UNLOCKED: {name}")
-                                                print(f"\n🔓 ACCESS GRANTED: {name} ({confidence:.0%})")
+                                                print(f"\n🔓 ACCESS GRANTED: {name}")
                                                 log_system('success', f'Door unlocked: {name}')
                                                 
                                                 # Mark attendance using shared helper (also sends notifications)
@@ -2132,7 +2161,7 @@ def live_camera_door_lock():
                                                     session_marked += 1
                                                     today_count += 1
                                                     status_messages.append(f"✅ Attendance: {name}")
-                                                    print(f"   ✅ Attendance marked")
+                                                    print(f"   ✅ Attendance saved")
                                                 else:
                                                     status_messages.append(f"ℹ️ {name} (Already today)")
 
@@ -2153,11 +2182,13 @@ def live_camera_door_lock():
                                                     status_messages.append(f"🔓 Holding open: {name}")
                                                 else:
                                                     remaining = int(PERSON_COOLDOWN - (current_time - last_unlock))
-                                                    color = (255, 165, 0)  # Orange
+                                                    color = (0, 255, 0)
                                                     status = "cooldown"
                                                     status_messages.append(f"⏳ {name} (Wait {remaining}s)")
                                         else:
-                                            color = (0, 165, 255)  # Low confidence
+                                            name = "Unknown"
+                                            confidence = 0
+                                            color = (0, 0, 255)
                                             status = "low_conf"
                             
                             detected_faces.append({
@@ -2171,6 +2202,15 @@ def live_camera_door_lock():
                             if status == 'unknown':
                                 unknown_detected_this_cycle = True
                                 last_unknown_frame = frame.copy()
+
+                        if len(detected_faces) > 1:
+                            names = [face['name'] for face in detected_faces]
+                            multi_text = f"👥 Multiple detected: {', '.join(names[:4])}"
+                            status_messages.append(multi_text)
+
+                            if current_time - last_multi_output_time >= 2:
+                                print(multi_text)
+                                last_multi_output_time = current_time
 
                     if unknown_detected_this_cycle:
                         if unknown_start_time is None:
@@ -2214,22 +2254,22 @@ def live_camera_door_lock():
             # Draw UI - Header
             # ─────────────────────────────────────────────────
             header_color = (0, 100, 0) if door_is_unlocked else (40, 40, 40)
-            cv2.rectangle(display, (0, 0), (w, 85), header_color, -1)
+            cv2.rectangle(display, (0, 0), (w, 62), header_color, -1)
             
             door_status = "🔓 UNLOCKED" if door_is_unlocked else "🔒 LOCKED"
             cv2.putText(display, f"LIVE DOOR LOCK - {door_status}", 
-                       (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0) if door_is_unlocked else (255, 255, 255), 2)
+                       (15, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 0) if door_is_unlocked else (255, 255, 255), 2)
             
             # Stats
             elapsed = int(current_time - session_start)
             elapsed_str = f"{elapsed // 60}:{elapsed % 60:02d}"
-            stats_text = f"Today: {today_count}/{total} | Unlocks: {session_unlocks} | Marked: {session_marked} | Time: {elapsed_str}"
+            stats_text = f"Today: {today_count}/{total} | Unlocks: {session_unlocks} | Attendance: {session_marked} | Time: {elapsed_str}"
             cv2.putText(display, stats_text, 
-                       (15, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+                       (15, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1)
             
             # Door status indicator
             indicator_color = (0, 255, 0) if door_is_unlocked else (0, 0, 255)
-            cv2.circle(display, (w - 25, 40), 15, indicator_color, -1)
+            cv2.circle(display, (w - 20, 31), 10, indicator_color, -1)
             
             # ─────────────────────────────────────────────────
             # Draw face boxes
@@ -2238,13 +2278,10 @@ def live_camera_door_lock():
                 top, right, bottom, left = face['location']
                 color = face['color']
                 name = face['name']
-                conf = face.get('confidence', 0)
                 
                 cv2.rectangle(display, (left, top), (right, bottom), color, 3)
                 
                 name_text = f"{name}"
-                if conf > 0:
-                    name_text += f" ({conf:.0%})"
                 
                 text_size = cv2.getTextSize(name_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                 cv2.rectangle(display, 
@@ -2323,11 +2360,11 @@ def live_camera_door_lock():
         print("  ─────────────────────────────────────────────────────")
         print(f"  • Duration        : {elapsed_str}")
         print(f"  • Door unlocks    : {session_unlocks}")
-        print(f"  • Attendance marked: {session_marked}")
+        print(f"  • Attendance      : {session_marked}")
         print(f"  • Total today     : {today_count}/{total}")
         print("═" * 58)
         
-        log_system('info', f'Live door lock ended. Unlocks: {session_unlocks}, Marked: {session_marked}')
+        log_system('info', f'Live door lock ended. Unlocks: {session_unlocks}, Attendance: {session_marked}')
         print("\n👋 Done!")
 
 
@@ -2342,7 +2379,7 @@ if __name__ == '__main__':
     print("\n  SELECT MODE:\n")
     print("  ┌─────────────────────────────────────────────────────┐")
     print("  │  1. Live View        (Continuous recognition)      │")
-    print("  │  2. Live Attendance  (Auto attendance - No Arduino)│")
+    print("  │  2. Live Attendance  (More accurate, a bit heavier)│")
     print("  │  3. Live Door Lock   (Camera + Arduino - No PIR)   │")
     print("  │  4. Full Mode        (Arduino + Camera + PIR)      │")
     print("  └─────────────────────────────────────────────────────┘")

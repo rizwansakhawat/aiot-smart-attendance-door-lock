@@ -188,7 +188,7 @@ def build_unlock_command(student_name=None):
 def save_attendance(student, entry_type='success', location='Main Door'):
     """Save attendance record and send notifications"""
     try:
-        today = timezone.now().date()
+        today = timezone.localdate()
         existing = Attendance.objects.filter(
             student=student,
             timestamp__date=today,
@@ -1440,7 +1440,7 @@ def live_camera_attendance():
     # ─────────────────────────────────────────────────────────────
     # Get today's attendance count
     # ─────────────────────────────────────────────────────────────
-    today = timezone.now().date()
+    today = timezone.localdate()
     today_count = Attendance.objects.filter(
         timestamp__date=today,
         entry_type='success'
@@ -1919,7 +1919,7 @@ def live_camera_door_lock():
         return
     
     # Get today's attendance count
-    today = timezone.now().date()
+    today = timezone.localdate()
     today_count = Attendance.objects.filter(
         timestamp__date=today,
         entry_type='success'

@@ -322,7 +322,11 @@ class FaceRecognitionService:
         Returns:
             JSON string
         """
-        encodings_list = [enc.tolist() for enc in encodings]
+        encodings_list = []
+        for encoding in encodings:
+            normalized = self._normalize_encoding(encoding)
+            if normalized is not None:
+                encodings_list.append(normalized.tolist())
         return json.dumps(encodings_list)
     
     def json_to_encodings(self, json_string: str) -> List[np.ndarray]:
@@ -335,8 +339,36 @@ class FaceRecognitionService:
         Returns:
             List of numpy arrays
         """
-        encodings_list = json.loads(json_string)
-        return [np.array(enc) for enc in encodings_list]
+        try:
+            payload = json.loads(json_string)
+        except (TypeError, json.JSONDecodeError):
+            return []
+
+        if not isinstance(payload, list):
+            return []
+
+        if payload and all(not isinstance(item, (list, tuple)) for item in payload):
+            payload = [payload]
+
+        encodings = []
+        for item in payload:
+            normalized = self._normalize_encoding(item)
+            if normalized is not None:
+                encodings.append(normalized)
+
+        return encodings
+
+    def _normalize_encoding(self, encoding: Any) -> Optional[np.ndarray]:
+        """Convert a stored encoding into a flat 128-d vector."""
+        try:
+            normalized = np.asarray(encoding, dtype=np.float32).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+
+        if normalized.shape[0] != 128 or not np.isfinite(normalized).all():
+            return None
+
+        return normalized
     
     def calculate_average_encoding(self, encodings: List[np.ndarray]) -> np.ndarray:
         """
@@ -349,7 +381,15 @@ class FaceRecognitionService:
         Returns:
             Single average encoding
         """
-        return np.mean(encodings, axis=0)
+        normalized_encodings = [
+            encoding for encoding in (self._normalize_encoding(enc) for enc in encodings)
+            if encoding is not None
+        ]
+
+        if not normalized_encodings:
+            raise ValueError("No valid face encodings available")
+
+        return np.mean(np.vstack(normalized_encodings), axis=0)
     
     # ═══════════════════════════════════════════════════════════════
     # SECTION 3: FACE RECOGNITION / MATCHING

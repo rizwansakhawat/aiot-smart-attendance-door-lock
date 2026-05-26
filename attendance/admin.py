@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils import timezone
 from .models import Student, Attendance, SystemLog, Department, Section
 
 @admin.register(Department)
@@ -77,18 +78,18 @@ class AttendanceAdmin(admin.ModelAdmin):
     date_hierarchy = 'timestamp'
     list_per_page = 50
     
-    readonly_fields = ['timestamp']
+    # readonly_fields = ['timestamp']
     
     def student_name(self, obj):
         return obj.student.name if obj.student else 'Unknown'
     student_name.short_description = 'Student/Staff'
     
     def date(self, obj):
-        return obj.timestamp.strftime('%Y-%m-%d')
+        return timezone.localtime(obj.timestamp).strftime('%Y-%m-%d')
     date.short_description = 'Date'
     
     def time(self, obj):
-        return obj.timestamp.strftime('%H:%M:%S')
+        return timezone.localtime(obj.timestamp).strftime('%H:%M:%S')
     time.short_description = 'Time'
     
     def entry_badge(self, obj):

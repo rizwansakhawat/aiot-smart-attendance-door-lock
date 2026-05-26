@@ -190,7 +190,7 @@ def user_profile(request):
     # Get attendance statistics
     attendance_stats = {}
     if student:
-        today = timezone.now().date()
+        today = timezone.localdate()
         all_attendance = Attendance.objects.filter(
             student=student,
             entry_type='success'
@@ -360,7 +360,7 @@ def admin_dashboard(request):
     """
     Admin Dashboard - Full access to all data
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     yesterday = today - timedelta(days=1)
     seven_days_ago = today - timedelta(days=7)
 
@@ -535,7 +535,7 @@ def user_dashboard(request):
     """
     User Dashboard - Personal attendance records only
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     
     # Get student profile for logged-in user
     student = get_student_for_user(request.user)
@@ -1991,7 +1991,7 @@ def api_dashboard_stats(request):
     """
     API endpoint to get dashboard statistics
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     
     total_students = Student.objects.filter(is_active=True).count()
     present_today = Attendance.objects.filter(

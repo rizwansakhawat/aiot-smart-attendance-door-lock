@@ -30,6 +30,13 @@ from django.utils import timezone
 from django.conf import settings
 from attendance.models import Student, Attendance, SystemLog
 from attendance.services.face_recognition_service import FaceRecognitionService
+from attendance.services.liveness_service import (
+    LivenessService,
+    LIVENESS_CHALLENGE_ACTIVE,
+    LIVENESS_PASS,
+    LIVENESS_FAIL,
+    LIVENESS_TIMEOUT,
+)
 
 # ═══════════════════════════════════════════════════════════════════
 # Serial Import
@@ -88,6 +95,7 @@ LIVE_FALLBACK_MIN_INTERVAL_SECONDS = float(getattr(settings, 'LIVE_FALLBACK_MIN_
 DISPLAY_WINDOW_WIDTH = int(getattr(settings, 'DISPLAY_WINDOW_WIDTH', 960))
 DISPLAY_WINDOW_HEIGHT = int(getattr(settings, 'DISPLAY_WINDOW_HEIGHT', 720))
 DOOR_COMMAND_FILE = os.path.join(PROJECT_DIR, 'media', 'runtime', 'door_system_command.json')
+LIVENESS_ENABLED = bool(getattr(settings, 'LIVENESS_ENABLED', False))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -554,6 +562,7 @@ class DoorSystem:
     def __init__(self, require_arduino=True):
         self.conn = ConnectionManager()
         self.face_service = None
+        self.liveness_service = LivenessService() if LIVENESS_ENABLED else None
         self.running = False
         self.require_arduino = require_arduino
         self.last_check_time = 0
@@ -612,6 +621,8 @@ class DoorSystem:
             
             total = Student.objects.filter(is_active=True).count()
             print(f"   ✅ Ready ({total} registered students)")
+            if self.liveness_service is not None:
+                print("   ✅ Liveness challenge enabled")
             
             if total == 0:
                 print("   ⚠️ Warning: No students registered!")
@@ -764,6 +775,8 @@ class DoorSystem:
         status_messages = []
         status_time = 0
         last_multi_output_time = 0
+        liveness_state = None
+        last_liveness_log_time = 0
 
         try:
             while self.running:
@@ -840,6 +853,7 @@ class DoorSystem:
                     detected_faces = []
                     student = None
                     confidence = 0
+                    liveness_blocked_this_cycle = False
 
                     try:
                         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -867,6 +881,7 @@ class DoorSystem:
                                 face_name = "Unknown"
                                 face_color = (0, 0, 255)
                                 face_conf = 0
+                                face_status = "unknown"
 
                                 if self.face_service.known_face_encodings:
                                     distances = face_recognition.face_distance(
@@ -888,14 +903,43 @@ class DoorSystem:
                                             face_conf = candidate_conf
 
                                             if candidate_conf >= MIN_MATCH_CONFIDENCE:
-                                                face_name = candidate.name
-                                                face_color = (0, 255, 0)
+                                                if self.liveness_service is not None:
+                                                    liveness_result = self.liveness_service.verify_liveness(
+                                                        frame, (top, right, bottom, left)
+                                                    )
+                                                    liveness_state = liveness_result.get('status')
+                                                    if not liveness_result.get('passed', False):
+                                                        liveness_blocked_this_cycle = True
+                                                        face_name = "Liveness Check"
+                                                        face_color = (0, 165, 255)
+                                                        face_status = liveness_state or LIVENESS_CHALLENGE_ACTIVE
+                                                        status_messages = [f"🛡️ {liveness_result.get('message', 'Complete liveness challenge')}"]
+                                                        status_time = current_time
+                                                        if (
+                                                            liveness_state in (LIVENESS_FAIL, LIVENESS_TIMEOUT)
+                                                            and (current_time - last_liveness_log_time) >= 2
+                                                        ):
+                                                            log_system('warning', f'Liveness blocked access ({liveness_state})')
+                                                            last_liveness_log_time = current_time
+                                                    else:
+                                                        face_name = candidate.name
+                                                        face_color = (0, 255, 0)
+                                                        face_status = LIVENESS_PASS
+                                                else:
+                                                    face_name = candidate.name
+                                                    face_color = (0, 255, 0)
+                                                    face_status = LIVENESS_PASS
                                             else:
                                                 face_name = "Unknown"
                                                 face_conf = 0
                                                 face_color = (0, 0, 255)
+                                                face_status = "low_conf"
 
-                                            if candidate_conf >= MIN_MATCH_CONFIDENCE and candidate_conf > best_confidence:
+                                            if (
+                                                candidate_conf >= MIN_MATCH_CONFIDENCE
+                                                and face_status == LIVENESS_PASS
+                                                and candidate_conf > best_confidence
+                                            ):
                                                 best_student = candidate
                                                 best_confidence = candidate_conf
 
@@ -904,6 +948,7 @@ class DoorSystem:
                                     'location': (top, right, bottom, left),
                                     'color': face_color,
                                     'confidence': face_conf,
+                                    'status': face_status,
                                 })
 
                             student = best_student
@@ -940,6 +985,8 @@ class DoorSystem:
                             print_access_granted_block(student.name, confidence)
                             self.conn.send_command(build_unlock_command(student.name))
                             save_attendance(student)
+                            if self.liveness_service is not None:
+                                log_system('info', f'liveness_pass: {student.name}')
                             recent_unlocks[student.id] = current_time
 
                             last_result_text = f"ACCESS GRANTED: {student.name}"
@@ -959,7 +1006,7 @@ class DoorSystem:
 
                     if pir_window_active:
                         # Treat any visible-but-unverified face as unknown persistence.
-                        unverified_face_visible = bool(detected_faces) and student is None
+                        unverified_face_visible = bool(detected_faces) and student is None and not liveness_blocked_this_cycle
                         if unverified_face_visible:
                             if unknown_visible_since <= 0:
                                 unknown_visible_since = current_time
@@ -971,6 +1018,9 @@ class DoorSystem:
                             ):
                                 unknown_visible_since = 0
                                 unknown_last_seen_time = 0
+
+                    if liveness_blocked_this_cycle and self.require_arduino:
+                        self.conn.send_command("DENIED_HOLD")
 
                     last_recognition_time = current_time
 
@@ -1423,9 +1473,12 @@ def live_camera_attendance():
     try:
         service = FaceRecognitionService(tolerance=RECOGNITION_TOLERANCE, camera_index=CAMERA_INDEX)
         service.refresh_cache()
+        liveness_service = LivenessService() if LIVENESS_ENABLED else None
         
         total = Student.objects.filter(is_active=True).count()
         print(f"   ✅ Ready ({total} registered students)")
+        if liveness_service is not None:
+            print("   ✅ Liveness challenge enabled")
         
         if total == 0:
             print_error_box("NO STUDENTS", "No students registered!\n\nPlease register students first.")
@@ -1482,6 +1535,7 @@ def live_camera_attendance():
     status_messages = []
     status_time = 0
     last_multi_output_time = 0
+    last_liveness_log_time = 0
     
     try:
         while True:
@@ -1534,6 +1588,7 @@ def live_camera_attendance():
                 detected_faces = []
                 status_messages = []
                 unknown_detected_this_cycle = False
+                liveness_blocked_this_cycle = False
                 
                 try:
                     # Convert to RGB
@@ -2123,6 +2178,25 @@ def live_camera_door_lock():
                                         
                                         # Check if should unlock
                                         if confidence >= MIN_CONFIDENCE:
+                                            if liveness_service is not None:
+                                                liveness_result = liveness_service.verify_liveness(
+                                                    frame, (top, right, bottom, left)
+                                                )
+                                                liveness_state = liveness_result.get('status')
+                                                if not liveness_result.get('passed', False):
+                                                    liveness_blocked_this_cycle = True
+                                                    name = "Liveness Check"
+                                                    color = (0, 165, 255)
+                                                    status = liveness_state or LIVENESS_CHALLENGE_ACTIVE
+                                                    status_messages = [f"🛡️ {liveness_result.get('message', 'Complete liveness challenge')}"]
+                                                    if (
+                                                        liveness_state in (LIVENESS_FAIL, LIVENESS_TIMEOUT)
+                                                        and (current_time - last_liveness_log_time) >= 2
+                                                    ):
+                                                        log_system('warning', f'Liveness blocked access ({liveness_state})')
+                                                        last_liveness_log_time = current_time
+                                                    continue
+
                                             prev_count, prev_seen = recent_confirms.get(student.id, (0, 0))
                                             if current_time - prev_seen > CONFIRM_WINDOW_SECONDS:
                                                 prev_count = 0
@@ -2155,6 +2229,8 @@ def live_camera_door_lock():
                                                 status_messages.append(f"🔓 DOOR UNLOCKED: {name}")
                                                 print(f"\n🔓 ACCESS GRANTED: {name}")
                                                 log_system('success', f'Door unlocked: {name}')
+                                                if liveness_service is not None:
+                                                    log_system('info', f'liveness_pass: {name}')
                                                 
                                                 # Mark attendance using shared helper (also sends notifications)
                                                 if save_attendance(student, location='Door System'):
@@ -2237,6 +2313,10 @@ def live_camera_door_lock():
                             conn.send_command("IDLE")
                             unauthorized_active = False
                         unknown_start_time = None
+
+                    if liveness_blocked_this_cycle:
+                        conn.send_command("DENIED_HOLD")
+                        unauthorized_active = True
                     
                     if not face_locations:
                         status_messages = ["📷 Scanning..."]

@@ -14,13 +14,29 @@ Usage:
     result = service.recognize_face(image)
 """
 
-from .face_recognition_service import (
-    FaceRecognitionService,
-    get_face_recognition_service,
-    reset_face_service,
-    USB_CAMERA_INDEX,
-    BROKEN_CAMERA_INDEX,
-    DEFAULT_CAMERA_INDEX,
+try:
+    from .face_recognition_service import (
+        FaceRecognitionService,
+        get_face_recognition_service,
+        reset_face_service,
+        USB_CAMERA_INDEX,
+        BROKEN_CAMERA_INDEX,
+        DEFAULT_CAMERA_INDEX,
+    )
+except Exception:  # pragma: no cover - optional runtime dependency
+    FaceRecognitionService = None
+    get_face_recognition_service = None
+    reset_face_service = None
+    USB_CAMERA_INDEX = 0
+    BROKEN_CAMERA_INDEX = -1
+    DEFAULT_CAMERA_INDEX = 0
+
+from .face_landmark_service import FaceLandmarkService
+from .liveness_service import (
+    LivenessService,
+    LivenessChallenge,
+    blink_detection,
+    head_turn_detection,
 )
 
 __all__ = [
@@ -35,8 +51,12 @@ __all__ = [
     'USB_CAMERA_INDEX',
     'BROKEN_CAMERA_INDEX', 
     'DEFAULT_CAMERA_INDEX',
+    'FaceLandmarkService',
+    'LivenessService',
+    'LivenessChallenge',
+    'blink_detection',
+    'head_turn_detection',
 ]
 
 # Package version
 __version__ = '1.0.0'
-

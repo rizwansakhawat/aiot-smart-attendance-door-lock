@@ -37,6 +37,42 @@ Core outcomes:
 - asynchronous notification delivery with Celery workers
 - reporting and operational visibility via Django dashboards
 
+## Face Recognition Model (Viva Quick Answer)
+
+**Exact stack used in this project**
+- `face-recognition==1.3.0`
+- `face_recognition_models==0.3.0`
+- `dlib-bin==19.24.6`
+- `opencv-python==4.8.1.78` (camera/frame preprocessing, not embedding model)
+
+**Model and architecture**
+- Face detection in `attendance/services/face_recognition_service.py` uses `face_recognition.face_locations(..., model='hog')` by default.
+- Face embedding uses dlib's pre-trained **ResNet-based face recognition model** (128-dimensional embedding) exposed through `face_recognition.face_encodings(...)`.
+- Matching is done with Euclidean distance via `face_recognition.face_distance(...)`.
+
+**How it is used in this codebase**
+- Registered students' embeddings are loaded and averaged (`load_registered_faces`, `calculate_average_encoding`).
+- For each live frame, system detects face → generates unknown embedding → computes distances with cached embeddings (`recognize_face`).
+- Best match is selected using `np.argmin(face_distances)`.
+
+**Key thresholds/parameters**
+- `FACE_RECOGNITION_TOLERANCE = 0.42` (settings)
+- `FACE_RECOGNITION_MIN_CONFIDENCE = 0.58`
+- `FACE_RECOGNITION_MIN_GAP = 0.04`
+- `FACE_RECOGNITION_CONFIRM_FRAMES = 2`
+- `FACE_RECOGNITION_CONFIRM_WINDOW_SECONDS = 1.5`
+- `FACE_RECOGNITION_UPSAMPLE = 1`
+
+**Why this model was chosen (project context)**
+- Practical CPU-friendly pipeline for real-time door lock decisions.
+- Mature Python integration (Django + OpenCV + face_recognition).
+- 128-D embeddings + distance thresholding are simple to tune and deploy on edge-style systems.
+
+**Viva comparison with alternatives**
+- vs OpenCV classical recognizers (LBPH/Eigenfaces): dlib embeddings are generally more robust to pose/lighting changes.
+- vs deep alternatives like FaceNet/ArcFace: those can be more accurate at scale, but usually need heavier training/inference stack and deployment complexity.
+- Current project prioritizes **deployment simplicity + real-time responsiveness** over state-of-the-art benchmark accuracy.
+
 ## Hardware Layer
 
 - Arduino Uno

@@ -273,3 +273,7 @@ py .\door_system.py 4
 py .\test_notifications.py
 py .\test_notifications.py --no-wait
 ```
+
+## Viva Preparation
+
+- Liveness detection viva Q&A (future enhancement, not implemented yet): [`VIVA_LIVENESS_DETECTION_QA.md`](VIVA_LIVENESS_DETECTION_QA.md)

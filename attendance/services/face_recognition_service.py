@@ -20,6 +20,10 @@ import time
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
 
+try:
+    from .liveness_service import LivenessService, LIVENESS_PASS
+except Exception:  # pragma: no cover - standalone execution
+    from attendance.services.liveness_service import LivenessService, LIVENESS_PASS
 
 # ═══════════════════════════════════════════════════════════════════
 # CAMERA CONFIGURATION - IMPORTANT!
@@ -146,6 +150,8 @@ class FaceRecognitionService:
             int(getattr(settings, 'FACE_RECOGNITION_MAX_IMAGE_HEIGHT', 360)),
         )  # Smaller default keeps live recognition responsive
         self.detection_upsample = int(getattr(settings, 'FACE_RECOGNITION_UPSAMPLE', 0))
+        self.liveness_enabled = bool(getattr(settings, 'LIVENESS_ENABLED', False)) if DJANGO_SETTINGS_AVAILABLE else False
+        self.liveness_service = LivenessService() if self.liveness_enabled else None
         
         print("=" * 50)
         print("🧠 Face Recognition Service initialized")
@@ -155,6 +161,7 @@ class FaceRecognitionService:
         print(f"   📷 Camera Index: {self.camera_index}")
         print(f"   Min Confidence: {self.min_match_confidence:.2f}")
         print(f"   Min Distance Gap: {self.min_match_gap:.2f}")
+        print(f"   Liveness Gate: {'ON' if self.liveness_enabled else 'OFF'}")
         print("=" * 50)
     
     # ═══════════════════════════════════════════════════════════════
@@ -465,6 +472,8 @@ class FaceRecognitionService:
                 'distance': float (face distance),
                 'time_ms': float (processing time),
                 'face_location': tuple or None,
+                'liveness_status': str or None,
+                'liveness_details': dict or None,
                 'error': str or None
             }
         
@@ -491,7 +500,9 @@ class FaceRecognitionService:
             'distance_gap': 0.0,
             'time_ms': 0,
             'face_location': None,
-            'error': None
+            'error': None,
+            'liveness_status': None,
+            'liveness_details': None,
         }
         
         try:
@@ -522,6 +533,17 @@ class FaceRecognitionService:
             if not self.is_face_valid(face_location):
                 result['error'] = 'Face too small or invalid'
                 return self._finalize_result(result, start_time)
+
+            # Optional liveness challenge gate
+            if self.liveness_service is not None:
+                liveness_result = self.liveness_service.verify_liveness(image, face_location)
+                result['liveness_status'] = liveness_result.get('status')
+                result['liveness_details'] = liveness_result
+                if not liveness_result.get('passed', False):
+                    result['error'] = liveness_result.get('message') or 'Liveness verification failed'
+                    return self._finalize_result(result, start_time)
+            else:
+                result['liveness_status'] = LIVENESS_PASS
             
             # Generate encoding for unknown face
             encodings = face_recognition.face_encodings(rgb_image, [face_location])
